@@ -249,15 +249,13 @@ onValue(playersRef, (snapshot) => {
         }
     }
 
-    // Host checking to start game
-    if (myPlayerId === 'p1') {
-        get(stateRef).then(stateSnap => {
-            const st = stateSnap.val() || 'waiting';
-            if (Object.keys(data).length === 3 && st === 'waiting') {
-                startGameAsHost();
-            }
-        });
-    }
+    // Any player can check to start the game to avoid "Ghost P1" blocking the lobby
+    get(stateRef).then(stateSnap => {
+        const st = stateSnap.val();
+        if (Object.keys(data).length === 3 && st !== 'playing') {
+            startGameAsHost();
+        }
+    });
 
     checkWinCondition();
 });
@@ -608,15 +606,10 @@ async function checkWinCondition() {
 
 // Restart button
 restartBtn.addEventListener('click', () => {
-    // Host cleans up
-    if (myPlayerId === 'p1') {
-        set(playersRef, null);
-        set(stateRef, 'waiting');
-        set(bulletsRef, null);
-        set(itemsRef, null);
-    } else {
-        // Just remove myself if host is slow
-        remove(ref(db, `game/players/${myPlayerId}`));
-    }
+    // Anyone can clean up to prevent ghosts from breaking the next game
+    set(playersRef, null);
+    set(stateRef, 'waiting');
+    set(bulletsRef, null);
+    set(itemsRef, null);
     location.reload();
 });
