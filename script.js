@@ -252,7 +252,8 @@ onValue(playersRef, (snapshot) => {
     // Host checking to start game
     if (myPlayerId === 'p1') {
         get(stateRef).then(stateSnap => {
-            if (Object.keys(data).length === 3 && stateSnap.val() === 'waiting') {
+            const st = stateSnap.val() || 'waiting';
+            if (Object.keys(data).length === 3 && st === 'waiting') {
                 startGameAsHost();
             }
         });
