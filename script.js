@@ -82,8 +82,9 @@ let pauseTime = 0;
 let animationFrameId;
 
 const COLORS = { p1: '#ff2d55', p2: '#00e5ff', p3: '#ffd60a' };
-const ITEM_EMOJIS = { heal: '💊', speed: '⚡', rapid: '🔫' };
-const ITEM_COLORS = { heal: '#00ff44', speed: '#0088ff', rapid: '#bb00ff' };
+const ITEM_EMOJIS = { heal: '💊', speed: '⚡', rapid: '🔫', shield: '🛡️', shotgun: '💥', laser: '✨' };
+const ITEM_COLORS = { heal: '#00ff44', speed: '#0088ff', rapid: '#bb00ff', shield: '#ffffff', shotgun: '#ffd60a', laser: '#ff00ff' };
+let BULLET_DMG = 15;
 
 const MAX_HP = 200;
 let PLAYER_SPEED = 200; 
@@ -93,7 +94,7 @@ const PLAYER_RADIUS = 15;
 const BULLET_RADIUS = 4;
 const ITEM_RADIUS = 12;
 
-let buffs = { speedTime: 0, rapidTime: 0 };
+let buffs = { speedTime: 0, rapidTime: 0, shieldTime: 0, shotgunTime: 0, laserTime: 0 };
 let dashState = { activeTime: 0, cooldown: 0, vx: 0, vy: 0 };
 
 let localBullets = []; 
@@ -273,25 +274,27 @@ stopBtn.addEventListener('click', () => {
     }
 });
 
-exitBtn.addEventListener('click', async () => {
+exitBtn.addEventListener('click', () => {
     try {
         exitBtn.disabled = true;
         exitBtn.innerText = "EXITING...";
         
         if (isTestMode || myPlayerId === 'p1') {
-            await update(ref(db), {
+            update(ref(db), {
                 'game/state': 'waiting',
                 'game/players': null,
                 'game/bullets': null,
                 'game/items': null
-            });
+            }).finally(() => location.reload());
         } else if (myPlayerId) {
-            await remove(ref(db, `game/players/${myPlayerId}`));
+            remove(ref(db, `game/players/${myPlayerId}`)).finally(() => location.reload());
         }
+        
+        setTimeout(() => location.reload(), 800);
     } catch (e) {
         console.error("Exit error:", e);
+        location.reload();
     }
-    location.reload();
 });
 
 onValue(playersRef, (snapshot) => {
@@ -357,7 +360,7 @@ onValue(stateRef, (snapshot) => {
         localBullets = [];
         localItems = {};
         floatingTexts = [];
-        buffs = { speedTime: 0, rapidTime: 0 };
+        buffs = { speedTime: 0, rapidTime: 0, shieldTime: 0, shotgunTime: 0, laserTime: 0 };
         dashState = { activeTime: 0, cooldown: 0, vx: 0, vy: 0 };
         lastTime = performance.now();
         
@@ -399,7 +402,7 @@ function updateTimerUI() {
 
 function spawnItem() {
     if (Object.keys(localItems).length >= 4) return; 
-    const types = ['heal', 'speed', 'rapid'];
+    const types = ['heal', 'speed', 'rapid', 'shield', 'shotgun', 'laser'];
     const type = types[Math.floor(Math.random() * types.length)];
     const item = {
         type: type,
@@ -414,7 +417,7 @@ onChildRemoved(itemsRef, snap => delete localItems[snap.key]);
 
 onChildAdded(bulletsRef, snap => {
     const b = snap.val();
-    if (b) localBullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, owner: b.owner, color: COLORS[b.owner] });
+    if (b) localBullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, owner: b.owner, color: COLORS[b.owner], dmg: b.dmg, pierce: b.pierce });
 });
 
 // ==========================================
@@ -438,7 +441,7 @@ function gameLoop(timestamp = performance.now()) {
     updatePhysics(dt);
     render();
 
-    if (timestamp - lastSyncTime > 50 && myPlayerId && players[myPlayerId].isAlive) {
+    if (timestamp - lastSyncTime > 50 && myPlayerId && players[myPlayerId].isAlive && isPlaying) {
         update(ref(db, `game/players/${myPlayerId}`), {
             x: players[myPlayerId].x,
             y: players[myPlayerId].y,
@@ -470,6 +473,9 @@ function updatePhysics(dt) {
         else {
             if (buffs.speedTime > 0) { PLAYER_SPEED = 300; buffs.speedTime -= dt; } else PLAYER_SPEED = 200;
             if (buffs.rapidTime > 0) { FIRE_COOLDOWN = 100; buffs.rapidTime -= dt; } else FIRE_COOLDOWN = 300;
+            if (buffs.shieldTime > 0) buffs.shieldTime -= dt;
+            if (buffs.shotgunTime > 0) buffs.shotgunTime -= dt;
+            if (buffs.laserTime > 0) buffs.laserTime -= dt;
 
             let dx = 0; let dy = 0;
             if (keys.w) dy -= 1;
@@ -535,6 +541,111 @@ function updatePhysics(dt) {
                     isAlive: true,
                     respawnTime: 0
                 });
+            } else if (dummy && dummy.isAlive) {
+                // BOT AI LOGIC
+                if (!dummy.lastPos) dummy.lastPos = { x: dummy.x, y: dummy.y };
+                let target = myPlayerId && players[myPlayerId] && players[myPlayerId].isAlive ? players[myPlayerId] : null;
+                
+                let desX = 0, desY = 0;
+                let shouldShoot = false;
+                let aimAngle = 0;
+                let tX = target ? target.x : canvas.width/2;
+                let tY = target ? target.y : canvas.height/2;
+                
+                // Item Collection
+                let bestItemDist = Infinity;
+                let targetItem = null;
+                let targetItemKey = null;
+                for (let key in localItems) {
+                    let d = Math.hypot(localItems[key].x - dummy.x, localItems[key].y - dummy.y);
+                    if (d < bestItemDist) { bestItemDist = d; targetItem = localItems[key]; targetItemKey = key; }
+                }
+
+                let distToTarget = target ? Math.hypot(tX - dummy.x, tY - dummy.y) : Infinity;
+
+                if (targetItem && (bestItemDist < 300) && (bestItemDist < distToTarget || distToTarget > 350)) {
+                    let ilen = bestItemDist || 1;
+                    desX = (targetItem.x - dummy.x) / ilen;
+                    desY = (targetItem.y - dummy.y) / ilen;
+                } else if (target) {
+                    // Circle/chase target
+                    let dist = distToTarget || 1;
+                    let radial = (dist - 230) / 230;
+                    desX = (tX - dummy.x) / dist * radial;
+                    desY = (tY - dummy.y) / dist * radial;
+                    
+                    // Predictive Aim
+                    let lastTX = dummy.lastTargetPos ? dummy.lastTargetPos.x : tX;
+                    let lastTY = dummy.lastTargetPos ? dummy.lastTargetPos.y : tY;
+                    let tvX = (tX - lastTX) / (dt || 0.016);
+                    let tvY = (tY - lastTY) / (dt || 0.016);
+                    dummy.lastTargetPos = { x: tX, y: tY };
+
+                    let tHit = distToTarget / BULLET_SPEED;
+                    let predX = tX + tvX * tHit * 0.7; // Lead factor
+                    let predY = tY + tvY * tHit * 0.7;
+
+                    aimAngle = Math.atan2(predY - dummy.y, predX - dummy.x);
+                    shouldShoot = distToTarget < 550;
+                } else {
+                    desX = (canvas.width/2 - dummy.x); desY = (canvas.height/2 - dummy.y);
+                }
+                
+                // Dodge Bullets
+                let dodgeX = 0, dodgeY = 0;
+                for (let b of localBullets) {
+                    if (b.owner === dummyId) continue;
+                    let d = Math.hypot(b.x - dummy.x, b.y - dummy.y);
+                    if (d < 150) {
+                        let awayX = dummy.x - b.x;
+                        let awayY = dummy.y - b.y;
+                        let len = Math.hypot(awayX, awayY) || 1;
+                        let perpX = -awayY / len;
+                        let perpY = awayX / len;
+                        dodgeX += (awayX / len + perpX) * (150 - d) / 150;
+                        dodgeY += (awayY / len + perpY) * (150 - d) / 150;
+                    }
+                }
+                
+                if (dodgeX !== 0 || dodgeY !== 0) {
+                    let dLen = Math.hypot(dodgeX, dodgeY) || 1;
+                    desX += (dodgeX / dLen) * 2.5;
+                    desY += (dodgeY / dLen) * 2.5;
+                }
+
+                let dLen = Math.hypot(desX, desY);
+                if (dLen > 0.001) { desX /= dLen; desY /= dLen; }
+                
+                dummy.x += desX * PLAYER_SPEED * 0.8 * dt;
+                dummy.y += desY * PLAYER_SPEED * 0.8 * dt;
+                dummy.x = Math.max(PLAYER_RADIUS, Math.min(canvas.width - PLAYER_RADIUS, dummy.x));
+                dummy.y = Math.max(PLAYER_RADIUS, Math.min(canvas.height - PLAYER_RADIUS, dummy.y));
+                if (target) dummy.angle = aimAngle;
+                
+                dummy._fireTimer = (dummy._fireTimer || 0) - dt * 1000;
+                if (dummy._fireTimer <= 0 && shouldShoot) {
+                    let angle = aimAngle + (Math.random() - 0.5) * 0.17;
+                    const b = {
+                        x: dummy.x + Math.cos(angle) * (PLAYER_RADIUS + 5),
+                        y: dummy.y + Math.sin(angle) * (PLAYER_RADIUS + 5),
+                        vx: Math.cos(angle) * BULLET_SPEED,
+                        vy: Math.sin(angle) * BULLET_SPEED,
+                        owner: dummyId,
+                        dmg: BULLET_DMG
+                    };
+                    push(bulletsRef, b);
+                    playSound('shoot');
+                    dummy._fireTimer = FIRE_COOLDOWN * 1.2;
+                }
+                
+                // Item collision for bot
+                if (targetItem && bestItemDist < PLAYER_RADIUS + ITEM_RADIUS) {
+                    playSound('item');
+                    if (targetItem.type === 'heal') dummy.hp = Math.min(MAX_HP, dummy.hp + 50);
+                    addFloatingText(`+${targetItem.type.toUpperCase()}!`, dummy.x, dummy.y, ITEM_COLORS[targetItem.type]);
+                    remove(ref(db, `game/items/${targetItemKey}`)); 
+                    delete localItems[targetItemKey]; 
+                }
             }
         }
     }
@@ -556,7 +667,7 @@ function updatePhysics(dt) {
             let dist = Math.hypot(b.x - me.x, b.y - me.y);
             if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
                 hitSomeone = true;
-                takeDamage(20, b.owner, myPlayerId);
+                takeDamage(b.dmg || BULLET_DMG, b.owner, myPlayerId);
             }
         }
         
@@ -567,14 +678,14 @@ function updatePhysics(dt) {
                     let dist = Math.hypot(b.x - dummy.x, b.y - dummy.y);
                     if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
                         hitSomeone = true;
-                        takeDamage(20, b.owner, dummyId);
+                        takeDamage(b.dmg || BULLET_DMG, b.owner, dummyId);
                         break;
                     }
                 }
             }
         }
 
-        if (hitSomeone) {
+        if (hitSomeone && !b.pierce) {
             localBullets.splice(i, 1);
             continue;
         }
@@ -595,6 +706,9 @@ function applyItemEffect(type) {
         update(ref(db, `game/players/${myPlayerId}`), { hp: newHp });
     } else if (type === 'speed') { buffs.speedTime = 5; }
     else if (type === 'rapid') { buffs.rapidTime = 5; }
+    else if (type === 'shield') { buffs.shieldTime = 5; }
+    else if (type === 'shotgun') { buffs.shotgunTime = 8; }
+    else if (type === 'laser') { buffs.laserTime = 6; }
 }
 
 function addFloatingText(text, x, y, color) {
@@ -602,19 +716,48 @@ function addFloatingText(text, x, y, color) {
 }
 
 function fireBullet(x, y, angle) {
-    playSound('shoot');
-    const b = {
-        x: x + Math.cos(angle) * (PLAYER_RADIUS + 5),
-        y: y + Math.sin(angle) * (PLAYER_RADIUS + 5),
-        vx: Math.cos(angle) * BULLET_SPEED,
-        vy: Math.sin(angle) * BULLET_SPEED,
-        owner: myPlayerId
-    };
-    push(bulletsRef, b);
+    if (buffs.shotgunTime > 0) {
+        playSound('hit');
+        for (let i = -1; i <= 1; i++) {
+            let a = angle + (i * 0.25);
+            push(bulletsRef, {
+                x: x + Math.cos(a) * (PLAYER_RADIUS + 5),
+                y: y + Math.sin(a) * (PLAYER_RADIUS + 5),
+                vx: Math.cos(a) * BULLET_SPEED * 0.9,
+                vy: Math.sin(a) * BULLET_SPEED * 0.9,
+                owner: myPlayerId,
+                dmg: BULLET_DMG * 0.8
+            });
+        }
+    } else if (buffs.laserTime > 0) {
+        playSound('item');
+        push(bulletsRef, {
+            x: x + Math.cos(angle) * (PLAYER_RADIUS + 5),
+            y: y + Math.sin(angle) * (PLAYER_RADIUS + 5),
+            vx: Math.cos(angle) * BULLET_SPEED * 2,
+            vy: Math.sin(angle) * BULLET_SPEED * 2,
+            owner: myPlayerId,
+            dmg: BULLET_DMG * 1.5,
+            pierce: true
+        });
+    } else {
+        playSound('shoot');
+        push(bulletsRef, {
+            x: x + Math.cos(angle) * (PLAYER_RADIUS + 5),
+            y: y + Math.sin(angle) * (PLAYER_RADIUS + 5),
+            vx: Math.cos(angle) * BULLET_SPEED,
+            vy: Math.sin(angle) * BULLET_SPEED,
+            owner: myPlayerId,
+            dmg: BULLET_DMG
+        });
+    }
 }
 
 function takeDamage(amount, killerId, targetId = myPlayerId) {
     playSound('hit');
+    if (targetId === myPlayerId && buffs.shieldTime > 0) {
+        amount *= 0.4; // Shield reduces damage
+    }
     let hp = Math.max(0, players[targetId].hp - amount);
     let isAlive = hp > 0;
     
@@ -676,8 +819,13 @@ function render() {
             ctx.closePath();
             
             let hasAura = false;
-            if (id === myPlayerId && buffs.speedTime > 0) { ctx.shadowColor = ITEM_COLORS.speed; hasAura = true; }
-            if (id === myPlayerId && buffs.rapidTime > 0) { ctx.shadowColor = ITEM_COLORS.rapid; hasAura = true; }
+            if (id === myPlayerId) {
+                if (buffs.speedTime > 0) { ctx.shadowColor = ITEM_COLORS.speed; hasAura = true; }
+                else if (buffs.rapidTime > 0) { ctx.shadowColor = ITEM_COLORS.rapid; hasAura = true; }
+                else if (buffs.shieldTime > 0) { ctx.shadowColor = ITEM_COLORS.shield; hasAura = true; }
+                else if (buffs.shotgunTime > 0) { ctx.shadowColor = ITEM_COLORS.shotgun; hasAura = true; }
+                else if (buffs.laserTime > 0) { ctx.shadowColor = ITEM_COLORS.laser; hasAura = true; }
+            }
             if (!hasAura) ctx.shadowColor = COLORS[id];
             
             ctx.fillStyle = COLORS[id];

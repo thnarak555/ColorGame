@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,14 +11,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    
+
     <!-- Lobby Modal -->
     <div id="lobby-modal" class="modal active">
         <div class="modal-content">
             <h1>NEON<br>DEATHMATCH</h1>
             <p>Enter your name to join the 3-minute battle arena.</p>
-            
+
             <div class="input-group">
                 <input type="text" id="player-name-input" placeholder="Your Name..." maxlength="12">
             </div>
@@ -25,11 +27,13 @@
             <div id="lobby-status">
                 Waiting for players... ( <span id="player-count">0</span> / 3 )
             </div>
-            
+
             <button id="join-btn" class="neon-btn">JOIN GAME</button>
-            <button id="test-btn" class="neon-btn ghost" style="margin-top: 15px; width: 100%;">TEST (SINGLE PLAYER)</button>
-            <p id="player-assigned" class="hidden">Welcome, <span id="my-player-name-disp"></span>! You are <span id="my-player-num"></span></p>
-            
+            <button id="test-btn" class="neon-btn ghost" style="margin-top: 15px; width: 100%;">TEST (SINGLE
+                PLAYER)</button>
+            <p id="player-assigned" class="hidden">Welcome, <span id="my-player-name-disp"></span>! You are <span
+                    id="my-player-num"></span></p>
+
             <div class="leaderboard-section">
                 <h3>🏆 LEADERBOARD</h3>
                 <ul id="leaderboard-list">
@@ -45,30 +49,38 @@
             <div class="hp-card p1">
                 <span class="label" id="label-p1">P1 (RED)</span>
                 <div class="stats-row">
-                    <div class="hp-bar"><div class="hp-fill" id="hp-p1"></div></div>
+                    <div class="hp-bar">
+                        <div class="hp-fill" id="hp-p1"></div>
+                    </div>
                     <div class="kills" id="kills-p1">0 Kills</div>
                 </div>
             </div>
-            
+
             <div class="timer-display">
                 <span id="time-left">03:00</span>
                 <div id="in-game-controls" style="margin-top: 10px; display: flex; gap: 5px; justify-content: center;">
-                    <button id="stop-btn" class="neon-btn ghost" style="font-size: 0.7rem; padding: 5px 10px;">PAUSE</button>
-                    <button id="exit-btn" class="neon-btn ghost" style="font-size: 0.7rem; padding: 5px 10px;">EXIT</button>
+                    <button id="stop-btn" class="neon-btn ghost"
+                        style="font-size: 0.7rem; padding: 5px 10px;">PAUSE</button>
+                    <button id="exit-btn" class="neon-btn ghost"
+                        style="font-size: 0.7rem; padding: 5px 10px;">EXIT</button>
                 </div>
             </div>
 
             <div class="hp-card p2">
                 <span class="label" id="label-p2">P2 (BLUE)</span>
                 <div class="stats-row">
-                    <div class="hp-bar"><div class="hp-fill" id="hp-p2"></div></div>
+                    <div class="hp-bar">
+                        <div class="hp-fill" id="hp-p2"></div>
+                    </div>
                     <div class="kills" id="kills-p2">0 Kills</div>
                 </div>
-            </div>
+            </div>e
             <div class="hp-card p3">
                 <span class="label" id="label-p3">P3 (YELLOW)</span>
                 <div class="stats-row">
-                    <div class="hp-bar"><div class="hp-fill" id="hp-p3"></div></div>
+                    <div class="hp-bar">
+                        <div class="hp-fill" id="hp-p3"></div>
+                    </div>
                     <div class="kills" id="kills-p3">0 Kills</div>
                 </div>
             </div>
@@ -94,4 +106,5 @@
     <!-- Firebase SDK v10 Modular via CDN (type="module") -->
     <script type="module" src="script.js"></script>
 </body>
+
 </html>
