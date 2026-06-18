@@ -1,0 +1,272 @@
+:root {
+    --bg-color: #0b0c10;
+    --cell-empty: #1f2833;
+    
+    --p1-color: #ff003c; /* Neon Red */
+    --p1-glow: 0 0 10px #ff003c, 0 0 20px #ff003c;
+    
+    --p2-color: #00e5ff; /* Neon Blue */
+    --p2-glow: 0 0 10px #00e5ff, 0 0 20px #00e5ff;
+    
+    --p3-color: #ffea00; /* Neon Yellow */
+    --p3-glow: 0 0 10px #ffea00, 0 0 20px #ffea00;
+    
+    --text-color: #c5c6c7;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Orbitron', sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(11, 12, 16, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    backdrop-filter: blur(5px);
+}
+
+.modal.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.modal-content {
+    background: #111;
+    padding: 3rem;
+    border-radius: 15px;
+    text-align: center;
+    border: 2px solid #333;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    max-width: 500px;
+    width: 90%;
+}
+
+.modal-content h1 {
+    font-size: 3rem;
+    color: #fff;
+    text-shadow: 0 0 10px #fff;
+    margin-bottom: 1rem;
+    letter-spacing: 2px;
+}
+
+.modal-content h2 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #fff;
+}
+
+.modal-content p {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    color: #aaa;
+}
+
+#lobby-status {
+    margin: 1.5rem 0;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.neon-btn {
+    background: transparent;
+    color: #fff;
+    border: 2px solid #fff;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 8px;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.neon-btn:hover {
+    background: #fff;
+    color: #000;
+    box-shadow: 0 0 20px #fff, 0 0 40px #fff;
+}
+
+.neon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+#player-assigned {
+    margin-top: 15px;
+    font-size: 1.2rem;
+    color: #fff;
+}
+
+/* Game Wrapper */
+.game-wrapper {
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+/* HUD */
+.hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 30px;
+    background: #111;
+    padding: 15px 20px;
+    border-radius: 12px;
+    border: 1px solid #333;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.score-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 90px;
+}
+
+.score-card .label {
+    font-size: 0.8rem;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.score-card .score {
+    font-size: 2rem;
+    font-weight: 900;
+}
+
+.score-card.p1 { color: var(--p1-color); text-shadow: var(--p1-glow); }
+.score-card.p2 { color: var(--p2-color); text-shadow: var(--p2-glow); }
+.score-card.p3 { color: var(--p3-color); text-shadow: var(--p3-glow); }
+
+.timer {
+    font-size: 3.5rem;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 15px #fff;
+}
+
+/* Board */
+.board-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.grid-board {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    gap: 5px;
+    width: 100%;
+    max-width: 500px;
+    aspect-ratio: 1 / 1;
+    background: #000;
+    padding: 5px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+}
+
+.grid-board.disabled {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.cell {
+    background-color: var(--cell-empty);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.1s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cell:hover {
+    filter: brightness(1.2);
+}
+
+/* Cell Click Animation */
+.cell:active {
+    transform: scale(0.85);
+}
+
+/* Player Colors for Cells */
+.cell.p1 {
+    background-color: var(--p1-color);
+    box-shadow: var(--p1-glow);
+}
+
+.cell.p2 {
+    background-color: var(--p2-color);
+    box-shadow: var(--p2-glow);
+}
+
+.cell.p3 {
+    background-color: var(--p3-color);
+    box-shadow: var(--p3-glow);
+}
+
+/* Final Scores in Modal */
+.final-scores {
+    font-size: 1.5rem;
+    margin: 20px 0;
+    text-align: left;
+    display: inline-block;
+}
+
+.final-scores p {
+    margin: 10px 0;
+    font-weight: bold;
+}
+
+.final-scores p:nth-child(1) { color: var(--p1-color); text-shadow: var(--p1-glow); }
+.final-scores p:nth-child(2) { color: var(--p2-color); text-shadow: var(--p2-glow); }
+.final-scores p:nth-child(3) { color: var(--p3-color); text-shadow: var(--p3-glow); }
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .hud {
+        flex-wrap: wrap;
+        justify-content: space-around;
+        gap: 10px;
+    }
+    .timer {
+        width: 100%;
+        text-align: center;
+        order: -1;
+    }
+    .grid-board {
+        gap: 3px;
+        max-width: 95vw;
+    }
+}

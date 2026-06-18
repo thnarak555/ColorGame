@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Conquest</title>
+    <!-- Google Fonts: Orbitron -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- Lobby Modal -->
+    <div id="lobby-modal" class="modal active">
+        <div class="modal-content">
+            <h1>COLOR<br>CONQUEST</h1>
+            <p>Welcome to the ultimate neon territory battle.</p>
+            <div id="lobby-status">
+                Waiting for players... ( <span id="player-count">0</span> / 3 )
+            </div>
+            <button id="join-btn" class="neon-btn">JOIN GAME</button>
+            <p id="player-assigned" class="hidden">You are Player <span id="my-player-num"></span></p>
+        </div>
+    </div>
+
+    <!-- Main Game Area -->
+    <div class="game-wrapper">
+        <header class="hud">
+            <div class="score-card p1">
+                <span class="label">P1 (RED)</span>
+                <span class="score" id="score-p1">0</span>
+            </div>
+            <div class="timer">
+                <span id="time-left">30</span>
+            </div>
+            <div class="score-card p2">
+                <span class="label">P2 (BLUE)</span>
+                <span class="score" id="score-p2">0</span>
+            </div>
+            <div class="score-card p3">
+                <span class="label">P3 (YELLOW)</span>
+                <span class="score" id="score-p3">0</span>
+            </div>
+        </header>
+
+        <main class="board-container">
+            <div id="grid-board" class="grid-board disabled">
+                <!-- 100 cells will be generated here by JS -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="modal">
+        <div class="modal-content">
+            <h2>TIME'S UP!</h2>
+            <div id="winner-announcement">
+                <h1 id="winner-text">Player X Wins!</h1>
+            </div>
+            <div class="final-scores">
+                <p>Red: <span id="final-p1">0</span></p>
+                <p>Blue: <span id="final-p2">0</span></p>
+                <p>Yellow: <span id="final-p3">0</span></p>
+            </div>
+            <button id="restart-btn" class="neon-btn" onclick="location.reload()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK v10 Modular via CDN (type="module") -->
+    <script type="module" src="script.js"></script>
+</body>
+</html>
