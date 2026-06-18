@@ -17,28 +17,78 @@
     <!-- Lobby Modal -->
     <div id="lobby-modal" class="modal active">
         <div class="modal-content">
-            <h1>NEON<br>DEATHMATCH</h1>
-            <p>Enter your name to join the 3-minute battle arena.</p>
+            <div class="lobby-layout">
+                <div class="lobby-col-left">
+                    <h1>NEON<br>DEATHMATCH</h1>
+                    <p>Enter your name to join the 3-minute battle arena.</p>
 
-            <div class="input-group">
-                <input type="text" id="player-name-input" placeholder="Your Name..." maxlength="12">
-            </div>
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <input type="text" id="player-name-input" placeholder="Your Name..." maxlength="12">
+                    </div>
 
-            <div id="lobby-status">
-                Waiting for players... ( <span id="player-count">0</span> / 3 )
-            </div>
+                    <div id="lobby-status" style="margin-bottom: 0;">
+                        Waiting for players... ( <span id="player-count">0</span> / 3 )
+                    </div>
+                    
+                    <p id="player-assigned" class="hidden">Welcome, <span id="my-player-name-disp"></span>! You are <span id="my-player-num"></span></p>
 
-            <button id="join-btn" class="neon-btn">JOIN GAME</button>
-            <button id="test-btn" class="neon-btn ghost" style="margin-top: 15px; width: 100%;">TEST (SINGLE
-                PLAYER)</button>
-            <p id="player-assigned" class="hidden">Welcome, <span id="my-player-name-disp"></span>! You are <span
-                    id="my-player-num"></span></p>
+                    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 10px;">
+                        <button id="join-btn" class="neon-btn">JOIN GAME</button>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="lobby-settings-btn" class="neon-btn ghost">SETTINGS</button>
+                            <button id="test-btn" class="neon-btn ghost">TEST (SINGLE)</button>
+                        </div>
+                    </div>
+                </div>
 
-            <div class="leaderboard-section">
-                <h3>🏆 LEADERBOARD</h3>
-                <ul id="leaderboard-list">
-                    <li>Loading...</li>
-                </ul>
+                <div class="lobby-col-right">
+                    <div id="match-settings" class="match-settings-container" style="margin: 0;">
+                        <h4>MATCH RULES</h4>
+                        <div class="settings-grid">
+                            <div class="settings-group-inline">
+                                <label>Duration</label>
+                                <select id="rule-duration">
+                                    <option value="60000">1 Min</option>
+                                    <option value="180000" selected>3 Min</option>
+                                    <option value="300000">5 Min</option>
+                                    <option value="0">Unlimited</option>
+                                </select>
+                            </div>
+                            <div class="settings-group-inline">
+                                <label>Max HP</label>
+                                <select id="rule-hp">
+                                    <option value="100">100 HP</option>
+                                    <option value="200" selected>200 HP</option>
+                                    <option value="500">500 HP</option>
+                                </select>
+                            </div>
+                            <div class="settings-group-inline">
+                                <label>Items</label>
+                                <select id="rule-items">
+                                    <option value="0">Disabled</option>
+                                    <option value="3000">Fast</option>
+                                    <option value="6000" selected>Normal</option>
+                                    <option value="12000">Slow</option>
+                                </select>
+                            </div>
+                            <div class="settings-group-inline">
+                                <label>Speed</label>
+                                <select id="rule-speed">
+                                    <option value="200" selected>Normal</option>
+                                    <option value="300">Fast (x1.5)</option>
+                                    <option value="400">Crazy (x2)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="leaderboard-section" style="margin-top: 0; padding-top: 0; border: none; text-align: left;">
+                        <h3 style="margin-bottom: 8px;">🏆 LEADERBOARD</h3>
+                        <ul id="leaderboard-list">
+                            <li>Loading...</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -46,16 +96,6 @@
     <!-- Main Game Area -->
     <div class="game-wrapper">
         <header class="hud">
-            <div class="hp-card p1">
-                <span class="label" id="label-p1">P1 (RED)</span>
-                <div class="stats-row">
-                    <div class="hp-bar">
-                        <div class="hp-fill" id="hp-p1"></div>
-                    </div>
-                    <div class="kills" id="kills-p1">0 Kills</div>
-                </div>
-            </div>
-
             <div class="timer-display">
                 <span id="time-left">03:00</span>
                 <div id="in-game-controls" style="margin-top: 10px; display: flex; gap: 5px; justify-content: center;">
@@ -66,29 +106,86 @@
                 </div>
             </div>
 
-            <div class="hp-card p2">
-                <span class="label" id="label-p2">P2 (BLUE)</span>
-                <div class="stats-row">
-                    <div class="hp-bar">
-                        <div class="hp-fill" id="hp-p2"></div>
+            <div class="players-row">
+                <div class="hp-card p1">
+                    <span class="label" id="label-p1">P1 (RED)</span>
+                    <div class="stats-row">
+                        <div class="hp-bar">
+                            <div class="hp-fill" id="hp-p1"></div>
+                        </div>
+                        <div class="kills" id="kills-p1">0 Kills</div>
                     </div>
-                    <div class="kills" id="kills-p2">0 Kills</div>
                 </div>
-            </div>e
-            <div class="hp-card p3">
-                <span class="label" id="label-p3">P3 (YELLOW)</span>
-                <div class="stats-row">
-                    <div class="hp-bar">
-                        <div class="hp-fill" id="hp-p3"></div>
+
+                <div class="hp-card p2">
+                    <span class="label" id="label-p2">P2 (BLUE)</span>
+                    <div class="stats-row">
+                        <div class="hp-bar">
+                            <div class="hp-fill" id="hp-p2"></div>
+                        </div>
+                        <div class="kills" id="kills-p2">0 Kills</div>
                     </div>
-                    <div class="kills" id="kills-p3">0 Kills</div>
+                </div>
+                
+                <div class="hp-card p3">
+                    <span class="label" id="label-p3">P3 (YELLOW)</span>
+                    <div class="stats-row">
+                        <div class="hp-bar">
+                            <div class="hp-fill" id="hp-p3"></div>
+                        </div>
+                        <div class="kills" id="kills-p3">0 Kills</div>
+                    </div>
                 </div>
             </div>
         </header>
 
-        <main class="canvas-container">
-            <canvas id="game-canvas" width="800" height="600"></canvas>
+        <main class="canvas-container" id="canvas-container">
+            <canvas id="game-canvas" width="1280" height="720"></canvas>
+            
+            <div id="controls-watermark">
+                [W][A][S][D] Move &nbsp;&bull;&nbsp; [SPACE] Dash &nbsp;&bull;&nbsp; [CLICK] Shoot
+            </div>
         </main>
+    </div>
+
+    <div id="kill-feed"></div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content" style="max-width: 350px;">
+            <h2 style="font-size: 1.8rem;">SETTINGS</h2>
+            
+            <div class="settings-group">
+                <label>Master Volume:</label>
+                <input type="range" id="setting-vol" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            
+            <div class="settings-group">
+                <label>Damage Numbers:</label>
+                <label class="switch">
+                    <input type="checkbox" id="setting-dmg" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="settings-group">
+                <label>VFX (Trails/Flashes):</label>
+                <label class="switch">
+                    <input type="checkbox" id="setting-vfx" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="settings-group">
+                <label>Custom Crosshair:</label>
+                <label class="switch">
+                    <input type="checkbox" id="setting-crosshair" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <button id="close-settings-btn" class="neon-btn" style="margin-top: 20px;">CLOSE</button>
+        </div>
     </div>
 
     <!-- Game Over Modal -->

@@ -44,7 +44,7 @@ body {
 .modal {
     position: fixed;
     inset: 0;
-    background: rgba(7, 8, 13, 0.92);
+    background: rgba(7, 8, 13, 0.98);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -52,7 +52,6 @@ body {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.35s ease;
-    backdrop-filter: blur(6px);
     padding: 16px;
     overflow-y: auto;
 }
@@ -64,13 +63,13 @@ body {
 
 .modal-content {
     background: linear-gradient(180deg, var(--panel) 0%, #0b0d14 100%);
-    padding: 2rem;
+    padding: 2.5rem;
     border-radius: 18px;
     text-align: center;
     border: 1px solid var(--border);
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 25px 60px rgba(0, 0, 0, 0.7);
-    max-width: 460px;
-    width: 100%;
+    max-width: 900px;
+    width: 95%;
     max-height: 96vh;
     overflow-y: auto;
 }
@@ -136,9 +135,102 @@ body {
 #lobby-status {
     font-size: 0.85rem;
     color: var(--p2);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     font-weight: 700;
     letter-spacing: 1px;
+}
+
+/* Horizontal Lobby Layout */
+.lobby-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+    align-items: stretch;
+}
+
+.lobby-col-left {
+    flex: 1.2;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    text-align: left;
+}
+
+.lobby-col-right {
+    flex: 1;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.lobby-col-left h1 {
+    text-align: left;
+    font-size: 2.8rem;
+    margin-bottom: 0;
+}
+
+.lobby-col-left p {
+    text-align: left;
+    margin-bottom: 5px;
+}
+
+/* Match Settings Grid */
+.match-settings-container {
+    background: var(--panel-2);
+    padding: 15px;
+    border-radius: 12px;
+    margin: 15px 0;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.match-settings-container h4 {
+    margin-top: 0;
+    color: var(--p2);
+    font-size: 0.9em;
+    text-align: center;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    font-weight: 700;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.settings-group-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-group-inline label {
+    font-size: 0.75em;
+    color: var(--muted);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.settings-group-inline select {
+    background: #0b0d14;
+    color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.settings-group-inline select:hover {
+    border-color: var(--p2);
 }
 
 .neon-btn {
@@ -230,14 +322,15 @@ body {
 /* ============ GAME UI ============ */
 .game-wrapper {
     position: relative;
-    width: 900px;
-    max-width: 100vw;
+    width: 95vw;
+    max-width: 1400px;
 }
 
 .hud {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
     padding: 15px 20px;
     background: linear-gradient(180deg, var(--panel) 0%, rgba(15, 17, 26, 0.5) 100%);
     border-radius: 16px 16px 0 0;
@@ -248,11 +341,18 @@ body {
     position: relative;
 }
 
+.players-row {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    gap: 15px;
+}
+
 .hp-card {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    width: 25%;
+    flex: 1;
     background: rgba(255, 255, 255, 0.03);
     padding: 12px;
     border-radius: 12px;
@@ -298,7 +398,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 20%;
 }
 
 #time-left {
@@ -350,8 +449,10 @@ body {
 
 canvas {
     background-color: #050505;
-    cursor: crosshair;
     display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16/9;
 }
 
 @media (max-width: 950px) {
@@ -374,6 +475,133 @@ canvas {
     canvas {
         width: 100%;
         height: auto;
-        aspect-ratio: 4/3;
+        aspect-ratio: 16/9;
     }
+}
+
+/* ============ NEW UI ELEMENTS ============ */
+.settings-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settings-group label {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: var(--text);
+}
+
+/* Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--border);
+    transition: .4s;
+    border-radius: 20px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+input:checked + .slider {
+    background-color: var(--p2);
+    box-shadow: 0 0 10px var(--p2);
+}
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+/* Custom Range Slider */
+input[type=range] {
+    -webkit-appearance: none;
+    width: 120px;
+    background: transparent;
+}
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    margin-top: -6px;
+    box-shadow: 0 0 5px rgba(0,229,255,0.5);
+}
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: var(--p2);
+    border-radius: 2px;
+}
+
+/* Kill Feed */
+#kill-feed {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.kill-feed-item {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.1);
+    animation: fadein 0.3s forwards, fadeout 0.5s 4.5s forwards;
+}
+
+@keyframes fadein { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fadeout { from { opacity: 1; } to { opacity: 0; } }
+
+/* Watermark */
+#controls-watermark {
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.2);
+    font-weight: 700;
+    pointer-events: none;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+/* Crosshair classes */
+canvas.custom-crosshair {
+    cursor: crosshair; /* Fallback */
+    /* An actual custom image crosshair can be set via JS or CSS, but crosshair is fine, let's use a custom url */
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2v20m10-10H2" stroke="%2300e5ff" stroke-width="2" stroke-linecap="round"/></svg>') 12 12, crosshair;
+}
+canvas.hit-marker {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2v20m10-10H2" stroke="%23ff2d55" stroke-width="2" stroke-linecap="round"/><path d="M6 6l12 12m0-12L6 18" stroke="%23ff2d55" stroke-width="2" stroke-linecap="round"/></svg>') 12 12, crosshair !important;
 }

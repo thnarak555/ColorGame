@@ -51,6 +51,20 @@ const restartBtn = document.getElementById('restart-btn');
 const leaderboardList = document.getElementById('leaderboard-list');
 const timeLeftSpan = document.getElementById('time-left');
 
+const lobbySettingsBtn = document.getElementById('lobby-settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const closeSettingsBtn = document.getElementById('close-settings-btn');
+const settingVol = document.getElementById('setting-vol');
+const settingDmg = document.getElementById('setting-dmg');
+const settingVfx = document.getElementById('setting-vfx');
+const settingCrosshair = document.getElementById('setting-crosshair');
+
+const matchSettingsUI = document.getElementById('match-settings');
+const ruleDuration = document.getElementById('rule-duration');
+const ruleHp = document.getElementById('rule-hp');
+const ruleItems = document.getElementById('rule-items');
+const ruleSpeed = document.getElementById('rule-speed');
+
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
@@ -86,9 +100,13 @@ const ITEM_EMOJIS = { heal: '💊', speed: '⚡', rapid: '🔫', shield: '🛡�
 const ITEM_COLORS = { heal: '#00ff44', speed: '#0088ff', rapid: '#bb00ff', shield: '#ffffff', shotgun: '#ffd60a', laser: '#ff00ff' };
 let BULLET_DMG = 15;
 
-const MAX_HP = 200;
+let MAX_HP = 200;
+let BASE_SPEED = 200;
 let PLAYER_SPEED = 200; 
 let FIRE_COOLDOWN = 300; 
+let GAME_DURATION = 180000;
+let ITEM_SPAWN_RATE = 6000;
+
 const BULLET_SPEED = 600;
 const PLAYER_RADIUS = 15;
 const BULLET_RADIUS = 4;
@@ -97,9 +115,17 @@ const ITEM_RADIUS = 12;
 let buffs = { speedTime: 0, rapidTime: 0, shieldTime: 0, shotgunTime: 0, laserTime: 0 };
 let dashState = { activeTime: 0, cooldown: 0, vx: 0, vy: 0 };
 
+let clientSettings = {
+    volume: 0.5,
+    dmg: true,
+    vfx: true,
+    crosshair: true
+};
+
 let localBullets = []; 
 let localItems = {}; 
 let floatingTexts = []; 
+let particles = [];
 let players = {
     p1: { x: 400, y: 550, angle: 0, hp: MAX_HP, isAlive: false, name: '', kills: 0, respawnTime: 0 },
     p2: { x: 100, y: 100, angle: 0, hp: MAX_HP, isAlive: false, name: '', kills: 0, respawnTime: 0 },
@@ -107,9 +133,9 @@ let players = {
 };
 
 const SPAWN_POINTS = {
-    p1: { x: 400, y: 550 },
+    p1: { x: 640, y: 650 },
     p2: { x: 100, y: 100 },
-    p3: { x: 700, y: 100 }
+    p3: { x: 1180, y: 100 }
 };
 
 let keys = { w: false, a: false, s: false, d: false, space: false };
@@ -124,6 +150,8 @@ let gameEndTime = 0;
 // References
 const stateRef = ref(db, 'game/state');
 const endTimeRef = ref(db, 'game/endTime');
+const rulesRef = ref(db, 'game/rules');
+const eventsRef = ref(db, 'game/events');
 const playersRef = ref(db, 'game/players');
 const bulletsRef = ref(db, 'game/bullets');
 const itemsRef = ref(db, 'game/items');
@@ -163,6 +191,19 @@ canvas.addEventListener('mousedown', () => {
     initAudio();
 });
 canvas.addEventListener('mouseup', () => { isMouseDown = false; });
+
+lobbySettingsBtn.addEventListener('click', () => settingsModal.classList.add('active'));
+closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('active'));
+
+settingVol.addEventListener('input', e => clientSettings.volume = parseFloat(e.target.value));
+settingDmg.addEventListener('change', e => clientSettings.dmg = e.target.checked);
+settingVfx.addEventListener('change', e => clientSettings.vfx = e.target.checked);
+settingCrosshair.addEventListener('change', e => {
+    clientSettings.crosshair = e.target.checked;
+    if (clientSettings.crosshair) canvas.classList.add('custom-crosshair');
+    else canvas.classList.remove('custom-crosshair');
+});
+canvas.classList.add('custom-crosshair');
 
 // ==========================================
 // 5. Lobby & Leaderboard
@@ -232,6 +273,10 @@ joinBtn.addEventListener('click', async () => {
             let colorName = myPlayerId === 'p1' ? 'RED' : myPlayerId === 'p2' ? 'BLUE' : 'YELLOW';
             myPlayerNumSpan.innerText = `${myPlayerId.toUpperCase()} (${colorName})`;
             myPlayerNumSpan.style.color = COLORS[myPlayerId];
+            
+            if (myPlayerId === 'p1') {
+                matchSettingsUI.style.display = 'block';
+            }
         } else {
             alert("Lobby is full! Please wait for the next game.");
             joinBtn.disabled = false;
@@ -250,10 +295,16 @@ testBtn.addEventListener('click', async () => {
     myPlayerId = 'p1';
     myPlayerName = nameInput.value.trim() || "Tester";
     
+    let hp = parseInt(ruleHp.value) || 200;
+    
+    players.p1.name = myPlayerName;
+    players.p2.name = 'Dummy 1';
+    players.p3.name = 'Dummy 2';
+
     await update(ref(db), {
-        'game/players/p1': { x: SPAWN_POINTS.p1.x, y: SPAWN_POINTS.p1.y, angle: 0, hp: MAX_HP, isAlive: true, name: myPlayerName, kills: 0, respawnTime: 0 },
-        'game/players/p2': { x: SPAWN_POINTS.p2.x, y: SPAWN_POINTS.p2.y, angle: 0, hp: MAX_HP, isAlive: true, name: 'Dummy 1', kills: 0, respawnTime: 0 },
-        'game/players/p3': { x: SPAWN_POINTS.p3.x, y: SPAWN_POINTS.p3.y, angle: 0, hp: MAX_HP, isAlive: true, name: 'Dummy 2', kills: 0, respawnTime: 0 }
+        'game/players/p1': { x: SPAWN_POINTS.p1.x, y: SPAWN_POINTS.p1.y, angle: 0, hp: hp, isAlive: true, name: myPlayerName, kills: 0, respawnTime: 0 },
+        'game/players/p2': { x: SPAWN_POINTS.p2.x, y: SPAWN_POINTS.p2.y, angle: 0, hp: hp, isAlive: true, name: 'Dummy 1', kills: 0, respawnTime: 0 },
+        'game/players/p3': { x: SPAWN_POINTS.p3.x, y: SPAWN_POINTS.p3.y, angle: 0, hp: hp, isAlive: true, name: 'Dummy 2', kills: 0, respawnTime: 0 }
     });
 
     onDisconnect(ref(db, `game/players/${myPlayerId}`)).remove();
@@ -278,6 +329,7 @@ exitBtn.addEventListener('click', () => {
     try {
         exitBtn.disabled = true;
         exitBtn.innerText = "EXITING...";
+        isPlaying = false;
         
         if (isTestMode || myPlayerId === 'p1') {
             update(ref(db), {
@@ -304,13 +356,25 @@ onValue(playersRef, (snapshot) => {
     for (let id of ['p1', 'p2', 'p3']) {
         if (data[id]) {
             if (id !== myPlayerId) {
-                players[id] = { ...players[id], ...data[id] };
+                players[id].targetX = data[id].x;
+                players[id].targetY = data[id].y;
+                players[id].angle = data[id].angle;
+                players[id].hp = data[id].hp;
+                players[id].isAlive = data[id].isAlive;
+                players[id].name = data[id].name;
+                players[id].kills = data[id].kills || 0;
+                players[id].respawnTime = data[id].respawnTime || 0;
+                players[id].hasShield = data[id].hasShield || false;
+                players[id].spawnProtectTime = data[id].spawnProtectTime || 0;
+                players[id].lastKillerName = data[id].lastKillerName || '';
             } else {
                 players[id].hp = data[id].hp;
                 players[id].isAlive = data[id].isAlive;
                 players[id].kills = data[id].kills || 0;
                 players[id].respawnTime = data[id].respawnTime || 0;
                 players[id].name = data[id].name;
+                players[id].spawnProtectTime = data[id].spawnProtectTime || 0;
+                players[id].lastKillerName = data[id].lastKillerName || '';
             }
             
             let colorName = id === 'p1' ? 'RED' : id === 'p2' ? 'BLUE' : 'YELLOW';
@@ -319,6 +383,7 @@ onValue(playersRef, (snapshot) => {
             killsDisp[id].innerText = `${data[id].kills || 0} Kills`;
         } else {
             players[id].isAlive = false;
+            players[id].name = ''; // Prevent ghost names
             hpLabels[id].innerText = `Waiting...`;
             hpBars[id].style.width = `0%`;
             killsDisp[id].innerText = `0 Kills`;
@@ -328,21 +393,61 @@ onValue(playersRef, (snapshot) => {
     // Any player can check to start the game
     get(stateRef).then(stateSnap => {
         const st = stateSnap.val();
-        if (Object.keys(data).length === 3 && st !== 'playing' && st !== 'finished') {
+        if (Object.keys(data).length === 3 && st !== 'playing' && st !== 'finished' && myPlayerId === 'p1') {
             startGameAsHost();
         }
     });
+});
+
+onValue(rulesRef, snap => {
+    let r = snap.val();
+    if (r) {
+        GAME_DURATION = r.duration;
+        MAX_HP = r.hp;
+        ITEM_SPAWN_RATE = r.items;
+        BASE_SPEED = r.speed;
+        PLAYER_SPEED = BASE_SPEED;
+    }
 });
 
 // ==========================================
 // 6. Game State & Host Logic
 // ==========================================
 async function startGameAsHost() {
+    let dur = parseInt(ruleDuration.value) || 180000;
+    let hp = parseInt(ruleHp.value) || 200;
+    let itm = parseInt(ruleItems.value) || 6000;
+    let spd = parseInt(ruleSpeed.value) || 200;
+
+    GAME_DURATION = dur;
+    MAX_HP = hp;
+    ITEM_SPAWN_RATE = itm;
+    BASE_SPEED = spd;
+    PLAYER_SPEED = spd;
+
     const updates = {
         'game/bullets': null,
         'game/items': null,
-        'game/endTime': Date.now() + (3 * 60 * 1000) // 3 minutes
+        'game/events': null,
+        'game/rules': { duration: dur, hp: hp, items: itm, speed: spd },
+        'game/endTime': dur > 0 ? Date.now() + dur : 0
     };
+    
+    // Reset everyone
+    for (let id of ['p1', 'p2', 'p3']) {
+        if (players[id] && players[id].name) {
+            updates[`game/players/${id}/hp`] = hp;
+            updates[`game/players/${id}/isAlive`] = true;
+            updates[`game/players/${id}/kills`] = 0;
+            updates[`game/players/${id}/respawnTime`] = 0;
+            updates[`game/players/${id}/x`] = SPAWN_POINTS[id].x;
+            updates[`game/players/${id}/y`] = SPAWN_POINTS[id].y;
+            updates[`game/players/${id}/hasShield`] = false;
+            updates[`game/players/${id}/spawnProtectTime`] = 0;
+            updates[`game/players/${id}/lastKillerName`] = '';
+        }
+    }
+
     await update(ref(db), updates);
 
     await runTransaction(stateRef, (current) => {
@@ -365,24 +470,31 @@ onValue(stateRef, (snapshot) => {
         lastTime = performance.now();
         
         get(endTimeRef).then(snap => {
-            gameEndTime = snap.val() || Date.now() + 180000;
+            gameEndTime = snap.val() || (GAME_DURATION > 0 ? Date.now() + GAME_DURATION : 0);
             if (gameTimerInterval) clearInterval(gameTimerInterval);
             gameTimerInterval = setInterval(updateTimerUI, 200);
         });
 
         if (!animationFrameId) gameLoop();
         
-        if (myPlayerId === 'p1') {
+        if (myPlayerId === 'p1' && ITEM_SPAWN_RATE > 0) {
             if (itemSpawnInterval) clearInterval(itemSpawnInterval);
-            itemSpawnInterval = setInterval(spawnItem, 6000);
+            itemSpawnInterval = setInterval(spawnItem, ITEM_SPAWN_RATE);
         }
-    } else if (state === 'finished') {
+    } else if (state === 'finished' || state === 'waiting') {
         isPlaying = false;
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
         if (itemSpawnInterval) clearInterval(itemSpawnInterval);
         if (gameTimerInterval) clearInterval(gameTimerInterval);
-        timeLeftSpan.innerText = "00:00";
+        
+        if (state === 'finished') {
+            timeLeftSpan.innerText = "00:00";
+        }
+        
+        if (state === 'waiting' && !lobbyModal.classList.contains('active')) {
+            location.reload();
+        }
     }
 });
 
@@ -415,9 +527,35 @@ function spawnItem() {
 onChildAdded(itemsRef, snap => localItems[snap.key] = snap.val());
 onChildRemoved(itemsRef, snap => delete localItems[snap.key]);
 
+onChildAdded(eventsRef, snap => {
+    let ev = snap.val();
+    if (!ev) return;
+    if (ev.type === 'kill' && Date.now() - ev.timestamp < 10000) {
+        addKillFeed(`⚔️ ${ev.killerName} killed ${ev.targetName}`, ev.color);
+    } else if (ev.type === 'item' && Date.now() - ev.timestamp < 10000) {
+        addKillFeed(`${ev.emoji} ${ev.playerName} got ${ev.itemName}!`, ev.color);
+    }
+});
+
+function addKillFeed(text, color) {
+    const feed = document.getElementById('kill-feed');
+    if (!feed) return;
+    const item = document.createElement('div');
+    item.className = 'kill-feed-item';
+    item.innerHTML = `<span style="color:${color}">${text}</span>`;
+    feed.appendChild(item);
+    setTimeout(() => {
+        if (item.parentNode) item.parentNode.removeChild(item);
+    }, 5000);
+}
+
 onChildAdded(bulletsRef, snap => {
     const b = snap.val();
-    if (b) localBullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, owner: b.owner, color: COLORS[b.owner], dmg: b.dmg, pierce: b.pierce });
+    if (b) {
+        if (!b.id || !localBullets.some(lb => lb.id === b.id)) {
+            localBullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, owner: b.owner, color: COLORS[b.owner], dmg: b.dmg, pierce: b.pierce, id: b.id });
+        }
+    }
 });
 
 // ==========================================
@@ -445,7 +583,8 @@ function gameLoop(timestamp = performance.now()) {
         update(ref(db, `game/players/${myPlayerId}`), {
             x: players[myPlayerId].x,
             y: players[myPlayerId].y,
-            angle: players[myPlayerId].angle
+            angle: players[myPlayerId].angle,
+            hasShield: (buffs.shieldTime > 0)
         });
         lastSyncTime = timestamp;
     }
@@ -454,6 +593,22 @@ function gameLoop(timestamp = performance.now()) {
 }
 
 function updatePhysics(dt) {
+    // Enemy Lerping
+    for (let id of ['p1', 'p2', 'p3']) {
+        if (id !== myPlayerId && players[id] && players[id].isAlive) {
+            let p = players[id];
+            if (p.targetX !== undefined && p.targetY !== undefined) {
+                if (Math.hypot(p.targetX - p.x, p.targetY - p.y) > 300) {
+                    p.x = p.targetX;
+                    p.y = p.targetY;
+                } else {
+                    p.x += (p.targetX - p.x) * 15 * dt;
+                    p.y += (p.targetY - p.y) * 15 * dt;
+                }
+            }
+        }
+    }
+
     if (myPlayerId) {
         let me = players[myPlayerId];
 
@@ -465,13 +620,14 @@ function updatePhysics(dt) {
                     y: SPAWN_POINTS[myPlayerId].y,
                     hp: MAX_HP,
                     isAlive: true,
-                    respawnTime: 0
+                    respawnTime: 0,
+                    spawnProtectTime: Date.now() + 1500
                 });
             }
         } 
         // Active Logic
         else {
-            if (buffs.speedTime > 0) { PLAYER_SPEED = 300; buffs.speedTime -= dt; } else PLAYER_SPEED = 200;
+            if (buffs.speedTime > 0) { PLAYER_SPEED = BASE_SPEED * 1.5; buffs.speedTime -= dt; } else PLAYER_SPEED = BASE_SPEED;
             if (buffs.rapidTime > 0) { FIRE_COOLDOWN = 100; buffs.rapidTime -= dt; } else FIRE_COOLDOWN = 300;
             if (buffs.shieldTime > 0) buffs.shieldTime -= dt;
             if (buffs.shotgunTime > 0) buffs.shotgunTime -= dt;
@@ -498,6 +654,7 @@ function updatePhysics(dt) {
             }
 
             if (dashState.activeTime > 0) {
+                if (clientSettings.vfx) spawnParticle(me.x, me.y, COLORS[myPlayerId], 0.3, PLAYER_RADIUS);
                 me.x += dashState.vx * dt;
                 me.y += dashState.vy * dt;
                 dashState.activeTime -= dt;
@@ -541,111 +698,6 @@ function updatePhysics(dt) {
                     isAlive: true,
                     respawnTime: 0
                 });
-            } else if (dummy && dummy.isAlive) {
-                // BOT AI LOGIC
-                if (!dummy.lastPos) dummy.lastPos = { x: dummy.x, y: dummy.y };
-                let target = myPlayerId && players[myPlayerId] && players[myPlayerId].isAlive ? players[myPlayerId] : null;
-                
-                let desX = 0, desY = 0;
-                let shouldShoot = false;
-                let aimAngle = 0;
-                let tX = target ? target.x : canvas.width/2;
-                let tY = target ? target.y : canvas.height/2;
-                
-                // Item Collection
-                let bestItemDist = Infinity;
-                let targetItem = null;
-                let targetItemKey = null;
-                for (let key in localItems) {
-                    let d = Math.hypot(localItems[key].x - dummy.x, localItems[key].y - dummy.y);
-                    if (d < bestItemDist) { bestItemDist = d; targetItem = localItems[key]; targetItemKey = key; }
-                }
-
-                let distToTarget = target ? Math.hypot(tX - dummy.x, tY - dummy.y) : Infinity;
-
-                if (targetItem && (bestItemDist < 300) && (bestItemDist < distToTarget || distToTarget > 350)) {
-                    let ilen = bestItemDist || 1;
-                    desX = (targetItem.x - dummy.x) / ilen;
-                    desY = (targetItem.y - dummy.y) / ilen;
-                } else if (target) {
-                    // Circle/chase target
-                    let dist = distToTarget || 1;
-                    let radial = (dist - 230) / 230;
-                    desX = (tX - dummy.x) / dist * radial;
-                    desY = (tY - dummy.y) / dist * radial;
-                    
-                    // Predictive Aim
-                    let lastTX = dummy.lastTargetPos ? dummy.lastTargetPos.x : tX;
-                    let lastTY = dummy.lastTargetPos ? dummy.lastTargetPos.y : tY;
-                    let tvX = (tX - lastTX) / (dt || 0.016);
-                    let tvY = (tY - lastTY) / (dt || 0.016);
-                    dummy.lastTargetPos = { x: tX, y: tY };
-
-                    let tHit = distToTarget / BULLET_SPEED;
-                    let predX = tX + tvX * tHit * 0.7; // Lead factor
-                    let predY = tY + tvY * tHit * 0.7;
-
-                    aimAngle = Math.atan2(predY - dummy.y, predX - dummy.x);
-                    shouldShoot = distToTarget < 550;
-                } else {
-                    desX = (canvas.width/2 - dummy.x); desY = (canvas.height/2 - dummy.y);
-                }
-                
-                // Dodge Bullets
-                let dodgeX = 0, dodgeY = 0;
-                for (let b of localBullets) {
-                    if (b.owner === dummyId) continue;
-                    let d = Math.hypot(b.x - dummy.x, b.y - dummy.y);
-                    if (d < 150) {
-                        let awayX = dummy.x - b.x;
-                        let awayY = dummy.y - b.y;
-                        let len = Math.hypot(awayX, awayY) || 1;
-                        let perpX = -awayY / len;
-                        let perpY = awayX / len;
-                        dodgeX += (awayX / len + perpX) * (150 - d) / 150;
-                        dodgeY += (awayY / len + perpY) * (150 - d) / 150;
-                    }
-                }
-                
-                if (dodgeX !== 0 || dodgeY !== 0) {
-                    let dLen = Math.hypot(dodgeX, dodgeY) || 1;
-                    desX += (dodgeX / dLen) * 2.5;
-                    desY += (dodgeY / dLen) * 2.5;
-                }
-
-                let dLen = Math.hypot(desX, desY);
-                if (dLen > 0.001) { desX /= dLen; desY /= dLen; }
-                
-                dummy.x += desX * PLAYER_SPEED * 0.8 * dt;
-                dummy.y += desY * PLAYER_SPEED * 0.8 * dt;
-                dummy.x = Math.max(PLAYER_RADIUS, Math.min(canvas.width - PLAYER_RADIUS, dummy.x));
-                dummy.y = Math.max(PLAYER_RADIUS, Math.min(canvas.height - PLAYER_RADIUS, dummy.y));
-                if (target) dummy.angle = aimAngle;
-                
-                dummy._fireTimer = (dummy._fireTimer || 0) - dt * 1000;
-                if (dummy._fireTimer <= 0 && shouldShoot) {
-                    let angle = aimAngle + (Math.random() - 0.5) * 0.17;
-                    const b = {
-                        x: dummy.x + Math.cos(angle) * (PLAYER_RADIUS + 5),
-                        y: dummy.y + Math.sin(angle) * (PLAYER_RADIUS + 5),
-                        vx: Math.cos(angle) * BULLET_SPEED,
-                        vy: Math.sin(angle) * BULLET_SPEED,
-                        owner: dummyId,
-                        dmg: BULLET_DMG
-                    };
-                    push(bulletsRef, b);
-                    playSound('shoot');
-                    dummy._fireTimer = FIRE_COOLDOWN * 1.2;
-                }
-                
-                // Item collision for bot
-                if (targetItem && bestItemDist < PLAYER_RADIUS + ITEM_RADIUS) {
-                    playSound('item');
-                    if (targetItem.type === 'heal') dummy.hp = Math.min(MAX_HP, dummy.hp + 50);
-                    addFloatingText(`+${targetItem.type.toUpperCase()}!`, dummy.x, dummy.y, ITEM_COLORS[targetItem.type]);
-                    remove(ref(db, `game/items/${targetItemKey}`)); 
-                    delete localItems[targetItemKey]; 
-                }
             }
         }
     }
@@ -662,25 +714,16 @@ function updatePhysics(dt) {
         }
 
         let hitSomeone = false;
-        if (myPlayerId && players[myPlayerId].isAlive && b.owner !== myPlayerId) {
-            let me = players[myPlayerId];
-            let dist = Math.hypot(b.x - me.x, b.y - me.y);
-            if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
-                hitSomeone = true;
-                takeDamage(b.dmg || BULLET_DMG, b.owner, myPlayerId);
-            }
-        }
-        
-        if (!hitSomeone && isTestMode) {
-            for (let dummyId of ['p2', 'p3']) {
-                let dummy = players[dummyId];
-                if (dummy && dummy.isAlive && b.owner !== dummyId) {
-                    let dist = Math.hypot(b.x - dummy.x, b.y - dummy.y);
-                    if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
-                        hitSomeone = true;
-                        takeDamage(b.dmg || BULLET_DMG, b.owner, dummyId);
-                        break;
+        for (let targetId of ['p1', 'p2', 'p3']) {
+            if (b.owner !== targetId && players[targetId] && players[targetId].isAlive) {
+                let target = players[targetId];
+                let dist = Math.hypot(b.x - target.x, b.y - target.y);
+                if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
+                    hitSomeone = true;
+                    if (b.owner === myPlayerId || isTestMode) {
+                        takeDamage(b.dmg || BULLET_DMG, b.owner, targetId);
                     }
+                    break;
                 }
             }
         }
@@ -698,9 +741,24 @@ function updatePhysics(dt) {
         ft.life -= dt;
         if (ft.life <= 0) floatingTexts.splice(i, 1);
     }
+    
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].life -= dt;
+        if (particles[i].life <= 0) particles.splice(i, 1);
+    }
 }
 
 function applyItemEffect(type) {
+    push(ref(db, 'game/events'), {
+        type: 'item',
+        playerName: myPlayerName,
+        itemName: type.toUpperCase(),
+        emoji: ITEM_EMOJIS[type],
+        color: ITEM_COLORS[type],
+        timestamp: Date.now()
+    });
+
     if (type === 'heal') {
         let newHp = Math.min(MAX_HP, players[myPlayerId].hp + 50);
         update(ref(db, `game/players/${myPlayerId}`), { hp: newHp });
@@ -715,23 +773,39 @@ function addFloatingText(text, x, y, color) {
     floatingTexts.push({ text, x, y, life: 1.0, color });
 }
 
+function spawnParticle(x, y, color, life, size) {
+    if (!clientSettings.vfx) return;
+    particles.push({ x, y, color, life, maxLife: life, size });
+}
+
+function generateId() {
+    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+}
+
 function fireBullet(x, y, angle) {
+    if (clientSettings.vfx) {
+        spawnParticle(x + Math.cos(angle)*(PLAYER_RADIUS), y + Math.sin(angle)*(PLAYER_RADIUS), '#fff', 0.1, 8);
+    }
     if (buffs.shotgunTime > 0) {
         playSound('hit');
         for (let i = -1; i <= 1; i++) {
             let a = angle + (i * 0.25);
-            push(bulletsRef, {
+            let b = {
+                id: generateId(),
                 x: x + Math.cos(a) * (PLAYER_RADIUS + 5),
                 y: y + Math.sin(a) * (PLAYER_RADIUS + 5),
                 vx: Math.cos(a) * BULLET_SPEED * 0.9,
                 vy: Math.sin(a) * BULLET_SPEED * 0.9,
                 owner: myPlayerId,
                 dmg: BULLET_DMG * 0.8
-            });
+            };
+            localBullets.push({ ...b, color: COLORS[myPlayerId] });
+            push(bulletsRef, b);
         }
     } else if (buffs.laserTime > 0) {
         playSound('item');
-        push(bulletsRef, {
+        let b = {
+            id: generateId(),
             x: x + Math.cos(angle) * (PLAYER_RADIUS + 5),
             y: y + Math.sin(angle) * (PLAYER_RADIUS + 5),
             vx: Math.cos(angle) * BULLET_SPEED * 2,
@@ -739,25 +813,43 @@ function fireBullet(x, y, angle) {
             owner: myPlayerId,
             dmg: BULLET_DMG * 1.5,
             pierce: true
-        });
+        };
+        localBullets.push({ ...b, color: COLORS[myPlayerId] });
+        push(bulletsRef, b);
     } else {
         playSound('shoot');
-        push(bulletsRef, {
+        let b = {
+            id: generateId(),
             x: x + Math.cos(angle) * (PLAYER_RADIUS + 5),
             y: y + Math.sin(angle) * (PLAYER_RADIUS + 5),
             vx: Math.cos(angle) * BULLET_SPEED,
             vy: Math.sin(angle) * BULLET_SPEED,
             owner: myPlayerId,
             dmg: BULLET_DMG
-        });
+        };
+        localBullets.push({ ...b, color: COLORS[myPlayerId] });
+        push(bulletsRef, b);
     }
 }
 
 function takeDamage(amount, killerId, targetId = myPlayerId) {
+    if (players[targetId].spawnProtectTime && Date.now() < players[targetId].spawnProtectTime) return; // Invincible
+    
     playSound('hit');
-    if (targetId === myPlayerId && buffs.shieldTime > 0) {
+    let targetHasShield = (targetId === myPlayerId) ? (buffs.shieldTime > 0) : (players[targetId].hasShield);
+    if (targetHasShield) {
         amount *= 0.4; // Shield reduces damage
     }
+    
+    if (clientSettings.dmg && players[targetId]) {
+        addFloatingText(`-${Math.round(amount)}`, players[targetId].x, players[targetId].y - 25, '#ff2d55');
+    }
+    
+    if (killerId === myPlayerId && clientSettings.crosshair) {
+        canvas.classList.add('hit-marker');
+        setTimeout(() => canvas.classList.remove('hit-marker'), 150);
+    }
+
     let hp = Math.max(0, players[targetId].hp - amount);
     let isAlive = hp > 0;
     
@@ -765,6 +857,16 @@ function takeDamage(amount, killerId, targetId = myPlayerId) {
     
     if (!isAlive) {
         updates.respawnTime = Date.now() + 3000; // 3 sec respawn
+        updates.lastKillerName = players[killerId] ? players[killerId].name : 'Unknown';
+        
+        push(ref(db, 'game/events'), {
+            type: 'kill',
+            killerName: players[killerId] ? players[killerId].name : 'Unknown',
+            targetName: players[targetId] ? players[targetId].name : 'Unknown',
+            color: COLORS[killerId] || '#fff',
+            timestamp: Date.now()
+        });
+
         // Add kill to killer
         runTransaction(ref(db, `game/players/${killerId}/kills`), (kills) => {
             return (kills || 0) + 1;
@@ -803,6 +905,16 @@ function render() {
         ctx.fillText(ITEM_EMOJIS[item.type], item.x, item.y + 2);
     }
 
+    // Draw Particles
+    for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (p.life / p.maxLife), 0, Math.PI*2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1.0;
+
     // Draw Players
     for (let id of ['p1', 'p2', 'p3']) {
         let p = players[id];
@@ -828,11 +940,48 @@ function render() {
             }
             if (!hasAura) ctx.shadowColor = COLORS[id];
             
+            // Spawn Protection Blink
+            let isSpawnProtected = (p.spawnProtectTime && Date.now() < p.spawnProtectTime);
+            if (isSpawnProtected) {
+                ctx.globalAlpha = (Math.floor(Date.now() / 150) % 2 === 0) ? 0.3 : 0.8;
+                ctx.shadowColor = '#fff';
+            }
+            
             ctx.fillStyle = COLORS[id];
             ctx.shadowBlur = 15;
             ctx.fill();
+            ctx.globalAlpha = 1.0;
             
             ctx.rotate(-p.angle);
+            
+            if (id === myPlayerId) {
+                // Dash CD
+                if (dashState.cooldown > 0) {
+                    let cdPercent = 1 - (dashState.cooldown / 2.0);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + (cdPercent * 0.5)})`;
+                    ctx.fillRect(-PLAYER_RADIUS, PLAYER_RADIUS + 10, (PLAYER_RADIUS*2) * cdPercent, 4);
+                } else {
+                    ctx.fillStyle = '#00e5ff';
+                    ctx.fillRect(-PLAYER_RADIUS, PLAYER_RADIUS + 10, PLAYER_RADIUS*2, 4);
+                }
+
+                // Buff UI
+                let activeBuffs = [];
+                if (buffs.speedTime > 0) activeBuffs.push({icon: '⚡', time: buffs.speedTime, max: 5, color: ITEM_COLORS.speed});
+                if (buffs.rapidTime > 0) activeBuffs.push({icon: '🔫', time: buffs.rapidTime, max: 5, color: ITEM_COLORS.rapid});
+                if (buffs.shieldTime > 0) activeBuffs.push({icon: '🛡️', time: buffs.shieldTime, max: 5, color: ITEM_COLORS.shield});
+                if (buffs.shotgunTime > 0) activeBuffs.push({icon: '💥', time: buffs.shotgunTime, max: 8, color: ITEM_COLORS.shotgun});
+                if (buffs.laserTime > 0) activeBuffs.push({icon: '✨', time: buffs.laserTime, max: 6, color: ITEM_COLORS.laser});
+                
+                activeBuffs.forEach((b, idx) => {
+                    let offsetY = PLAYER_RADIUS + 18 + (idx * 8);
+                    ctx.fillStyle = b.color;
+                    ctx.fillRect(-PLAYER_RADIUS, offsetY, (PLAYER_RADIUS*2) * (b.time / b.max), 3);
+                    ctx.font = '10px sans-serif';
+                    ctx.fillText(b.icon, -PLAYER_RADIUS - 10, offsetY + 2);
+                });
+            }
+
             ctx.fillStyle = '#fff';
             ctx.shadowBlur = 0;
             ctx.font = '10px Orbitron';
@@ -846,6 +995,14 @@ function render() {
             if (remain > 0) {
                 ctx.save();
                 ctx.translate(p.x, p.y);
+                
+                if (id === myPlayerId && p.lastKillerName) {
+                    ctx.fillStyle = '#ff2d55';
+                    ctx.font = 'bold 16px Orbitron';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`KILLED BY ${p.lastKillerName.toUpperCase()}`, 0, -30);
+                }
+                
                 ctx.fillStyle = COLORS[id];
                 ctx.globalAlpha = 0.5;
                 ctx.font = '16px Orbitron';
@@ -908,7 +1065,7 @@ async function endGame() {
         let winner = winners[0];
         winnerText.innerText = `${winner.name} WINS!`;
         
-        if (winner.name === myPlayerName) {
+        if (winner.name === myPlayerName && !isTestMode) {
             const statRef = ref(db, `stats/wins/${myPlayerName}`);
             await runTransaction(statRef, current => (current || 0) + 1);
         }
