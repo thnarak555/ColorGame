@@ -37,6 +37,9 @@ const db = getDatabase(app);
 const lobbyModal = document.getElementById('lobby-modal');
 const gameOverModal = document.getElementById('game-over-modal');
 const joinBtn = document.getElementById('join-btn');
+const testBtn = document.getElementById('test-btn');
+const stopBtn = document.getElementById('stop-btn');
+const exitBtn = document.getElementById('exit-btn');
 const nameInput = document.getElementById('player-name-input');
 const playerCountSpan = document.getElementById('player-count');
 const playerAssignedP = document.getElementById('player-assigned');
@@ -73,9 +76,12 @@ const killsDisp = {
 let myPlayerId = null; 
 let myPlayerName = "";
 let isPlaying = false;
+let isPaused = false;
+let isTestMode = false;
+let pauseTime = 0;
 let animationFrameId;
 
-const COLORS = { p1: '#ff003c', p2: '#00e5ff', p3: '#ffea00' };
+const COLORS = { p1: '#ff2d55', p2: '#00e5ff', p3: '#ffd60a' };
 const ITEM_EMOJIS = { heal: '💊', speed: '⚡', rapid: '🔫' };
 const ITEM_COLORS = { heal: '#00ff44', speed: '#0088ff', rapid: '#bb00ff' };
 
@@ -151,7 +157,10 @@ canvas.addEventListener('mousemove', e => {
     mouseY = (e.clientY - rect.top) * scaleY;
 });
 
-canvas.addEventListener('mousedown', () => { isMouseDown = true; });
+canvas.addEventListener('mousedown', () => { 
+    isMouseDown = true; 
+    initAudio();
+});
 canvas.addEventListener('mouseup', () => { isMouseDown = false; });
 
 // ==========================================
@@ -174,6 +183,7 @@ onValue(statsRef, snapshot => {
 });
 
 joinBtn.addEventListener('click', async () => {
+    initAudio();
     const name = nameInput.value.trim();
     if (!name) { alert("Please enter a name first!"); return; }
 
@@ -233,6 +243,57 @@ joinBtn.addEventListener('click', async () => {
     }
 });
 
+testBtn.addEventListener('click', async () => {
+    initAudio();
+    isTestMode = true;
+    myPlayerId = 'p1';
+    myPlayerName = nameInput.value.trim() || "Tester";
+    
+    await update(ref(db), {
+        'game/players/p1': { x: SPAWN_POINTS.p1.x, y: SPAWN_POINTS.p1.y, angle: 0, hp: MAX_HP, isAlive: true, name: myPlayerName, kills: 0, respawnTime: 0 },
+        'game/players/p2': { x: SPAWN_POINTS.p2.x, y: SPAWN_POINTS.p2.y, angle: 0, hp: MAX_HP, isAlive: true, name: 'Dummy 1', kills: 0, respawnTime: 0 },
+        'game/players/p3': { x: SPAWN_POINTS.p3.x, y: SPAWN_POINTS.p3.y, angle: 0, hp: MAX_HP, isAlive: true, name: 'Dummy 2', kills: 0, respawnTime: 0 }
+    });
+
+    onDisconnect(ref(db, `game/players/${myPlayerId}`)).remove();
+    startGameAsHost();
+});
+
+stopBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    stopBtn.innerText = isPaused ? "RESUME" : "PAUSE";
+    if (isPaused) {
+        pauseTime = Date.now();
+    } else {
+        let pausedDuration = Date.now() - pauseTime;
+        gameEndTime += pausedDuration;
+        if (myPlayerId === 'p1') {
+            update(ref(db, 'game'), { endTime: gameEndTime });
+        }
+    }
+});
+
+exitBtn.addEventListener('click', async () => {
+    try {
+        exitBtn.disabled = true;
+        exitBtn.innerText = "EXITING...";
+        
+        if (isTestMode || myPlayerId === 'p1') {
+            await update(ref(db), {
+                'game/state': 'waiting',
+                'game/players': null,
+                'game/bullets': null,
+                'game/items': null
+            });
+        } else if (myPlayerId) {
+            await remove(ref(db, `game/players/${myPlayerId}`));
+        }
+    } catch (e) {
+        console.error("Exit error:", e);
+    }
+    location.reload();
+});
+
 onValue(playersRef, (snapshot) => {
     const data = snapshot.val() || {};
     playerCountSpan.innerText = Object.keys(data).length;
@@ -274,18 +335,17 @@ onValue(playersRef, (snapshot) => {
 // 6. Game State & Host Logic
 // ==========================================
 async function startGameAsHost() {
-    // Only one transaction needed to set state securely
-    await runTransaction(stateRef, (current) => {
-        if (current !== 'playing') return 'playing';
-        return;
-    });
-
     const updates = {
         'game/bullets': null,
         'game/items': null,
         'game/endTime': Date.now() + (3 * 60 * 1000) // 3 minutes
     };
     await update(ref(db), updates);
+
+    await runTransaction(stateRef, (current) => {
+        if (current !== 'playing') return 'playing';
+        return;
+    });
 }
 
 onValue(stateRef, (snapshot) => {
@@ -324,7 +384,7 @@ onValue(stateRef, (snapshot) => {
 });
 
 function updateTimerUI() {
-    const now = Date.now();
+    const now = isPaused ? pauseTime : Date.now();
     const remaining = Math.max(0, Math.ceil((gameEndTime - now) / 1000));
     
     let m = Math.floor(remaining / 60).toString().padStart(2, '0');
@@ -365,6 +425,12 @@ let lastSyncTime = 0;
 
 function gameLoop(timestamp = performance.now()) {
     if (!isPlaying) return;
+    
+    if (isPaused) {
+        lastTime = timestamp;
+        animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+    }
     
     const dt = (timestamp - lastTime) / 1000;
     lastTime = timestamp;
@@ -448,11 +514,27 @@ function updatePhysics(dt) {
                 let item = localItems[key];
                 let dist = Math.hypot(item.x - me.x, item.y - me.y);
                 if (dist < PLAYER_RADIUS + ITEM_RADIUS) {
+                    playSound('item');
                     applyItemEffect(item.type);
                     addFloatingText(`+${item.type.toUpperCase()}!`, item.x, item.y, ITEM_COLORS[item.type]);
                     remove(ref(db, `game/items/${key}`)); 
                     delete localItems[key]; 
                 }
+            }
+        }
+    }
+
+    if (isTestMode) {
+        for (let dummyId of ['p2', 'p3']) {
+            let dummy = players[dummyId];
+            if (dummy && !dummy.isAlive && dummy.respawnTime > 0 && Date.now() >= dummy.respawnTime) {
+                update(ref(db, `game/players/${dummyId}`), {
+                    x: SPAWN_POINTS[dummyId].x,
+                    y: SPAWN_POINTS[dummyId].y,
+                    hp: MAX_HP,
+                    isAlive: true,
+                    respawnTime: 0
+                });
             }
         }
     }
@@ -468,14 +550,33 @@ function updatePhysics(dt) {
             continue;
         }
 
+        let hitSomeone = false;
         if (myPlayerId && players[myPlayerId].isAlive && b.owner !== myPlayerId) {
             let me = players[myPlayerId];
             let dist = Math.hypot(b.x - me.x, b.y - me.y);
             if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
-                localBullets.splice(i, 1);
-                takeDamage(20, b.owner);
-                continue;
+                hitSomeone = true;
+                takeDamage(20, b.owner, myPlayerId);
             }
+        }
+        
+        if (!hitSomeone && isTestMode) {
+            for (let dummyId of ['p2', 'p3']) {
+                let dummy = players[dummyId];
+                if (dummy && dummy.isAlive && b.owner !== dummyId) {
+                    let dist = Math.hypot(b.x - dummy.x, b.y - dummy.y);
+                    if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
+                        hitSomeone = true;
+                        takeDamage(20, b.owner, dummyId);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (hitSomeone) {
+            localBullets.splice(i, 1);
+            continue;
         }
     }
 
@@ -501,6 +602,7 @@ function addFloatingText(text, x, y, color) {
 }
 
 function fireBullet(x, y, angle) {
+    playSound('shoot');
     const b = {
         x: x + Math.cos(angle) * (PLAYER_RADIUS + 5),
         y: y + Math.sin(angle) * (PLAYER_RADIUS + 5),
@@ -511,8 +613,9 @@ function fireBullet(x, y, angle) {
     push(bulletsRef, b);
 }
 
-function takeDamage(amount, killerId) {
-    let hp = Math.max(0, players[myPlayerId].hp - amount);
+function takeDamage(amount, killerId, targetId = myPlayerId) {
+    playSound('hit');
+    let hp = Math.max(0, players[targetId].hp - amount);
     let isAlive = hp > 0;
     
     let updates = { hp, isAlive };
@@ -525,14 +628,14 @@ function takeDamage(amount, killerId) {
         });
     }
     
-    update(ref(db, `game/players/${myPlayerId}`), updates);
+    update(ref(db, `game/players/${targetId}`), updates);
 }
 
 function render() {
     ctx.fillStyle = '#050505';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.strokeStyle = '#111';
+    ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
     for(let i=0; i<canvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
     for(let i=0; i<canvas.height; i+=40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
@@ -614,6 +717,7 @@ function render() {
         ctx.shadowBlur = 10;
         ctx.fill();
     }
+    ctx.shadowBlur = 0;
 
     for (let ft of floatingTexts) {
         ctx.fillStyle = ft.color;
@@ -676,6 +780,49 @@ async function endGame() {
         set(stateRef, 'finished');
     }
     gameOverModal.classList.add('active');
+}
+
+// --- AUDIO SYSTEM ---
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain).connect(audioCtx.destination);
+    
+    if (type === 'shoot') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.exponentialRampToValueAtTime(200, t + 0.1);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        osc.start(t);
+        osc.stop(t + 0.1);
+    } else if (type === 'hit') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.2);
+        gain.gain.setValueAtTime(0.08, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        osc.start(t);
+        osc.stop(t + 0.2);
+    } else if (type === 'item') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.linearRampToValueAtTime(1200, t + 0.15);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        osc.start(t);
+        osc.stop(t + 0.15);
+    }
 }
 
 restartBtn.addEventListener('click', () => {
