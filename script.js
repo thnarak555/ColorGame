@@ -8,7 +8,10 @@ import {
     get, 
     onDisconnect,
     push,
-    onChildAdded
+    onChildAdded,
+    onChildRemoved,
+    remove,
+    runTransaction
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // ==========================================
@@ -25,7 +28,6 @@ const firebaseConfig = {
     measurementId: "G-SD9YB4H3XH"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
@@ -35,15 +37,24 @@ const db = getDatabase(app);
 const lobbyModal = document.getElementById('lobby-modal');
 const gameOverModal = document.getElementById('game-over-modal');
 const joinBtn = document.getElementById('join-btn');
+const nameInput = document.getElementById('player-name-input');
 const playerCountSpan = document.getElementById('player-count');
 const playerAssignedP = document.getElementById('player-assigned');
 const myPlayerNumSpan = document.getElementById('my-player-num');
+const myPlayerNameDisp = document.getElementById('my-player-name-disp');
 const winnerText = document.getElementById('winner-text');
+const winnerStatsText = document.getElementById('winner-stats-text');
 const restartBtn = document.getElementById('restart-btn');
+const leaderboardList = document.getElementById('leaderboard-list');
 
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
+const hpLabels = {
+    p1: document.getElementById('label-p1'),
+    p2: document.getElementById('label-p2'),
+    p3: document.getElementById('label-p3')
+};
 const hpBars = {
     p1: document.getElementById('hp-p1'),
     p2: document.getElementById('hp-p2'),
@@ -54,6 +65,7 @@ const hpBars = {
 // 3. Game Variables & Constants
 // ==========================================
 let myPlayerId = null; 
+let myPlayerName = "";
 let isPlaying = false;
 let animationFrameId;
 
@@ -63,19 +75,28 @@ const COLORS = {
     p3: '#ffea00'
 };
 
+const ITEM_COLORS = {
+    heal: '#00ff44',    // Green
+    speed: '#0088ff',   // Blue
+    rapid: '#bb00ff'    // Purple
+};
+
 const MAX_HP = 100;
-const PLAYER_SPEED = 200; // pixels per second
+let PLAYER_SPEED = 200; 
+let FIRE_COOLDOWN = 300; 
 const BULLET_SPEED = 500;
 const PLAYER_RADIUS = 15;
 const BULLET_RADIUS = 4;
-const FIRE_COOLDOWN = 300; // ms
+const ITEM_RADIUS = 10;
 
-// Local game state
-let localBullets = []; // {x, y, vx, vy, owner, color}
+let buffs = { speedTime: 0, rapidTime: 0 };
+
+let localBullets = []; 
+let localItems = {}; // id -> {type, x, y}
 let players = {
-    p1: { x: 400, y: 500, angle: 0, hp: MAX_HP, isAlive: false },
-    p2: { x: 150, y: 100, angle: 0, hp: MAX_HP, isAlive: false },
-    p3: { x: 650, y: 100, angle: 0, hp: MAX_HP, isAlive: false }
+    p1: { x: 400, y: 500, angle: 0, hp: MAX_HP, isAlive: false, name: '' },
+    p2: { x: 150, y: 100, angle: 0, hp: MAX_HP, isAlive: false, name: '' },
+    p3: { x: 650, y: 100, angle: 0, hp: MAX_HP, isAlive: false, name: '' }
 };
 
 const SPAWN_POINTS = {
@@ -89,32 +110,36 @@ let mouseX = 0;
 let mouseY = 0;
 let isMouseDown = false;
 let lastFireTime = 0;
+let itemSpawnInterval = null;
 
 // References
 const stateRef = ref(db, 'game/state');
 const playersRef = ref(db, 'game/players');
 const bulletsRef = ref(db, 'game/bullets');
+const itemsRef = ref(db, 'game/items');
+const statsRef = ref(db, 'stats/wins');
 
 // ==========================================
 // 4. Input Handling
 // ==========================================
 window.addEventListener('keydown', e => {
-    if (e.key === 'w' || e.key === 'ArrowUp') keys.w = true;
-    if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = true;
-    if (e.key === 's' || e.key === 'ArrowDown') keys.s = true;
-    if (e.key === 'd' || e.key === 'ArrowRight') keys.d = true;
+    let k = e.key.toLowerCase();
+    if (k === 'w' || e.key === 'ArrowUp') keys.w = true;
+    if (k === 'a' || e.key === 'ArrowLeft') keys.a = true;
+    if (k === 's' || e.key === 'ArrowDown') keys.s = true;
+    if (k === 'd' || e.key === 'ArrowRight') keys.d = true;
 });
 
 window.addEventListener('keyup', e => {
-    if (e.key === 'w' || e.key === 'ArrowUp') keys.w = false;
-    if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = false;
-    if (e.key === 's' || e.key === 'ArrowDown') keys.s = false;
-    if (e.key === 'd' || e.key === 'ArrowRight') keys.d = false;
+    let k = e.key.toLowerCase();
+    if (k === 'w' || e.key === 'ArrowUp') keys.w = false;
+    if (k === 'a' || e.key === 'ArrowLeft') keys.a = false;
+    if (k === 's' || e.key === 'ArrowDown') keys.s = false;
+    if (k === 'd' || e.key === 'ArrowRight') keys.d = false;
 });
 
 canvas.addEventListener('mousemove', e => {
     const rect = canvas.getBoundingClientRect();
-    // Scale mouse coordinates to match canvas internal resolution
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     mouseX = (e.clientX - rect.left) * scaleX;
@@ -125,9 +150,32 @@ canvas.addEventListener('mousedown', () => { isMouseDown = true; });
 canvas.addEventListener('mouseup', () => { isMouseDown = false; });
 
 // ==========================================
-// 5. Lobby & Player Join
+// 5. Lobby & Leaderboard
 // ==========================================
+onValue(statsRef, snapshot => {
+    const winsData = snapshot.val() || {};
+    // Sort descending
+    const sorted = Object.entries(winsData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    
+    leaderboardList.innerHTML = '';
+    if (sorted.length === 0) {
+        leaderboardList.innerHTML = '<li>No games played yet.</li>';
+    } else {
+        sorted.forEach(([name, score], index) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span>#${index+1} ${name}</span> <span>${score} Wins</span>`;
+            leaderboardList.appendChild(li);
+        });
+    }
+});
+
 joinBtn.addEventListener('click', async () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+        alert("Please enter a name first!");
+        return;
+    }
+
     joinBtn.disabled = true;
     joinBtn.innerText = "JOINING...";
 
@@ -140,32 +188,30 @@ joinBtn.addEventListener('click', async () => {
         else if (!pData.p3) myPlayerId = 'p3';
         
         if (myPlayerId) {
-            // Register player
+            myPlayerName = name;
             const initialData = {
                 x: SPAWN_POINTS[myPlayerId].x,
                 y: SPAWN_POINTS[myPlayerId].y,
                 angle: 0,
                 hp: MAX_HP,
-                isAlive: true
+                isAlive: true,
+                name: myPlayerName
             };
+            
             await set(ref(db, `game/players/${myPlayerId}`), initialData);
             onDisconnect(ref(db, `game/players/${myPlayerId}`)).remove();
 
+            nameInput.classList.add('hidden');
             joinBtn.classList.add('hidden');
             playerAssignedP.classList.remove('hidden');
             
+            myPlayerNameDisp.innerText = myPlayerName;
             let colorName = myPlayerId === 'p1' ? 'RED' : myPlayerId === 'p2' ? 'BLUE' : 'YELLOW';
             myPlayerNumSpan.innerText = `${myPlayerId.toUpperCase()} (${colorName})`;
             myPlayerNumSpan.style.color = COLORS[myPlayerId];
 
-            // Start game if 3 players
-            const newSnapshot = await get(playersRef);
-            const newPlayers = newSnapshot.val() || {};
-            if (newPlayers.p1 && newPlayers.p2 && newPlayers.p3) {
-                startGame();
-            }
         } else {
-            alert("Lobby is full!");
+            alert("Lobby is full! Please wait for the next game.");
             joinBtn.disabled = false;
             joinBtn.innerText = "JOIN GAME";
         }
@@ -180,46 +226,51 @@ onValue(playersRef, (snapshot) => {
     const data = snapshot.val() || {};
     playerCountSpan.innerText = Object.keys(data).length;
 
-    // Sync remote players to local state
-    for (let id in data) {
-        if (id !== myPlayerId) {
-            players[id] = { ...players[id], ...data[id] };
-        }
-        // Always sync HP and isAlive for everyone including myself (if hit by others)
-        players[id].hp = data[id].hp;
-        players[id].isAlive = data[id].isAlive;
-    }
-
-    // Update HP UI
+    // Sync state
     for (let id of ['p1', 'p2', 'p3']) {
         if (data[id]) {
+            if (id !== myPlayerId) {
+                players[id] = { ...players[id], ...data[id] };
+            } else {
+                // I only sync HP and isAlive from server, so others can damage me
+                players[id].hp = data[id].hp;
+                players[id].isAlive = data[id].isAlive;
+                players[id].name = data[id].name;
+            }
+            
+            // Update HUD text
+            let colorName = id === 'p1' ? 'RED' : id === 'p2' ? 'BLUE' : 'YELLOW';
+            hpLabels[id].innerText = `${data[id].name} (${colorName})`;
             hpBars[id].style.width = `${Math.max(0, data[id].hp)}%`;
         } else {
+            players[id].isAlive = false;
+            hpLabels[id].innerText = `Waiting...`;
             hpBars[id].style.width = `0%`;
         }
     }
 
-    // Auto-start check for all clients
-    get(stateRef).then(stateSnap => {
-        if (Object.keys(data).length === 3 && stateSnap.val() === 'waiting') {
-            startGame();
-        }
-    });
+    // Host checking to start game
+    if (myPlayerId === 'p1') {
+        get(stateRef).then(stateSnap => {
+            if (Object.keys(data).length === 3 && stateSnap.val() === 'waiting') {
+                startGameAsHost();
+            }
+        });
+    }
 
     checkWinCondition();
 });
 
 // ==========================================
-// 6. Game State Sync
+// 6. Game State & Host Logic
 // ==========================================
-async function startGame() {
-    const snapshot = await get(stateRef);
-    if (snapshot.val() !== 'playing') {
-        const updates = {};
-        updates['game/state'] = 'playing';
-        updates['game/bullets'] = null; // clear bullets
-        await update(ref(db), updates);
-    }
+async function startGameAsHost() {
+    const updates = {
+        'game/state': 'playing',
+        'game/bullets': null,
+        'game/items': null
+    };
+    await update(ref(db), updates);
 }
 
 onValue(stateRef, (snapshot) => {
@@ -228,26 +279,56 @@ onValue(stateRef, (snapshot) => {
         lobbyModal.classList.remove('active');
         isPlaying = true;
         localBullets = [];
+        localItems = {};
+        buffs = { speedTime: 0, rapidTime: 0 };
+        PLAYER_SPEED = 200;
+        FIRE_COOLDOWN = 300;
         lastTime = performance.now();
+        
         if (!animationFrameId) gameLoop();
+        
+        // P1 handles item spawning
+        if (myPlayerId === 'p1') {
+            if (itemSpawnInterval) clearInterval(itemSpawnInterval);
+            itemSpawnInterval = setInterval(spawnItem, 6000);
+        }
     } else if (state === 'finished') {
         isPlaying = false;
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
+        if (itemSpawnInterval) clearInterval(itemSpawnInterval);
     }
 });
 
-// Listen for new bullets fired by anyone
+// Item Spawner (P1 only)
+function spawnItem() {
+    if (Object.keys(localItems).length >= 3) return; // Max 3 items
+    
+    const types = ['heal', 'speed', 'rapid'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const item = {
+        type: type,
+        x: 50 + Math.random() * (canvas.width - 100),
+        y: 50 + Math.random() * (canvas.height - 100)
+    };
+    push(itemsRef, item);
+}
+
+// Listen for items
+onChildAdded(itemsRef, (snapshot) => {
+    localItems[snapshot.key] = snapshot.val();
+});
+onChildRemoved(itemsRef, (snapshot) => {
+    delete localItems[snapshot.key];
+});
+
+// Listen for bullets
 onChildAdded(bulletsRef, (snapshot) => {
     const b = snapshot.val();
     if (b) {
         localBullets.push({
-            x: b.x,
-            y: b.y,
-            vx: b.vx,
-            vy: b.vy,
-            owner: b.owner,
-            color: COLORS[b.owner]
+            x: b.x, y: b.y, vx: b.vx, vy: b.vy, 
+            owner: b.owner, color: COLORS[b.owner]
         });
     }
 });
@@ -261,13 +342,13 @@ let lastSyncTime = 0;
 function gameLoop(timestamp = performance.now()) {
     if (!isPlaying) return;
     
-    const dt = (timestamp - lastTime) / 1000; // delta time in seconds
+    const dt = (timestamp - lastTime) / 1000;
     lastTime = timestamp;
 
     updatePhysics(dt);
     render();
 
-    // Sync my position to Firebase at 20fps (every 50ms)
+    // Sync position
     if (timestamp - lastSyncTime > 50 && myPlayerId && players[myPlayerId].isAlive) {
         update(ref(db, `game/players/${myPlayerId}`), {
             x: players[myPlayerId].x,
@@ -281,10 +362,20 @@ function gameLoop(timestamp = performance.now()) {
 }
 
 function updatePhysics(dt) {
-    // 1. Update My Player
     if (myPlayerId && players[myPlayerId].isAlive) {
         let me = players[myPlayerId];
         
+        // Handle Buffs
+        if (buffs.speedTime > 0) {
+            PLAYER_SPEED = 300;
+            buffs.speedTime -= dt;
+        } else PLAYER_SPEED = 200;
+
+        if (buffs.rapidTime > 0) {
+            FIRE_COOLDOWN = 100;
+            buffs.rapidTime -= dt;
+        } else FIRE_COOLDOWN = 300;
+
         // Movement
         let dx = 0; let dy = 0;
         if (keys.w) dy -= 1;
@@ -292,7 +383,6 @@ function updatePhysics(dt) {
         if (keys.a) dx -= 1;
         if (keys.d) dx += 1;
         
-        // Normalize vector
         if (dx !== 0 && dy !== 0) {
             const length = Math.sqrt(dx*dx + dy*dy);
             dx /= length; dy /= length;
@@ -301,43 +391,59 @@ function updatePhysics(dt) {
         me.x += dx * PLAYER_SPEED * dt;
         me.y += dy * PLAYER_SPEED * dt;
 
-        // Boundaries
         me.x = Math.max(PLAYER_RADIUS, Math.min(canvas.width - PLAYER_RADIUS, me.x));
         me.y = Math.max(PLAYER_RADIUS, Math.min(canvas.height - PLAYER_RADIUS, me.y));
 
-        // Aiming
         me.angle = Math.atan2(mouseY - me.y, mouseX - me.x);
 
-        // Shooting
         if (isMouseDown && performance.now() - lastFireTime > FIRE_COOLDOWN) {
             fireBullet(me.x, me.y, me.angle);
             lastFireTime = performance.now();
         }
+
+        // Item Collision
+        for (let key in localItems) {
+            let item = localItems[key];
+            let dist = Math.hypot(item.x - me.x, item.y - me.y);
+            if (dist < PLAYER_RADIUS + ITEM_RADIUS) {
+                applyItemEffect(item.type);
+                remove(ref(db, `game/items/${key}`)); // Remove from DB
+                delete localItems[key]; // Remove locally to prevent multi-pickup
+            }
+        }
     }
 
-    // 2. Update Bullets
+    // Update Bullets
     for (let i = localBullets.length - 1; i >= 0; i--) {
         let b = localBullets[i];
         b.x += b.vx * dt;
         b.y += b.vy * dt;
 
-        // Remove if off-screen
         if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
             localBullets.splice(i, 1);
             continue;
         }
 
-        // Collision detection (Only I detect hits on MYSELF to avoid double damage)
         if (myPlayerId && players[myPlayerId].isAlive && b.owner !== myPlayerId) {
             let me = players[myPlayerId];
             let dist = Math.hypot(b.x - me.x, b.y - me.y);
             if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
-                // I got hit!
                 localBullets.splice(i, 1);
                 takeDamage(20);
                 continue;
             }
         }
+    }
+}
+
+function applyItemEffect(type) {
+    if (type === 'heal') {
+        let newHp = Math.min(MAX_HP, players[myPlayerId].hp + 30);
+        update(ref(db, `game/players/${myPlayerId}`), { hp: newHp });
+    } else if (type === 'speed') {
+        buffs.speedTime = 5; // 5 seconds
+    } else if (type === 'rapid') {
+        buffs.rapidTime = 5; // 5 seconds
     }
 }
 
@@ -355,19 +461,13 @@ function fireBullet(x, y, angle) {
 function takeDamage(amount) {
     let hp = Math.max(0, players[myPlayerId].hp - amount);
     let isAlive = hp > 0;
-    
-    update(ref(db, `game/players/${myPlayerId}`), {
-        hp: hp,
-        isAlive: isAlive
-    });
+    update(ref(db, `game/players/${myPlayerId}`), { hp, isAlive });
 }
 
 function render() {
-    // Clear canvas
     ctx.fillStyle = '#050505';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Grid Lines (Neon Arena feel)
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 1;
     for(let i=0; i<canvas.width; i+=40) {
@@ -375,6 +475,26 @@ function render() {
     }
     for(let i=0; i<canvas.height; i+=40) {
         ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+    }
+
+    // Draw Items
+    for (let key in localItems) {
+        let item = localItems[key];
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, ITEM_RADIUS, 0, Math.PI*2);
+        ctx.fillStyle = ITEM_COLORS[item.type];
+        ctx.shadowColor = ITEM_COLORS[item.type];
+        ctx.shadowBlur = 15;
+        ctx.fill();
+
+        // Draw letter inside
+        ctx.fillStyle = '#000';
+        ctx.shadowBlur = 0;
+        ctx.font = '12px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        let letter = item.type === 'heal' ? 'H' : (item.type === 'speed' ? 'S' : 'R');
+        ctx.fillText(letter, item.x, item.y);
     }
 
     // Draw Players
@@ -385,7 +505,6 @@ function render() {
             ctx.translate(p.x, p.y);
             ctx.rotate(p.angle);
             
-            // Draw Ship
             ctx.beginPath();
             ctx.moveTo(PLAYER_RADIUS, 0);
             ctx.lineTo(-PLAYER_RADIUS, -PLAYER_RADIUS/1.5);
@@ -393,22 +512,25 @@ function render() {
             ctx.lineTo(-PLAYER_RADIUS, PLAYER_RADIUS/1.5);
             ctx.closePath();
             
+            // If they have buffs, add aura
+            let hasAura = false;
+            if (id === myPlayerId && buffs.speedTime > 0) { ctx.shadowColor = ITEM_COLORS.speed; hasAura = true; }
+            if (id === myPlayerId && buffs.rapidTime > 0) { ctx.shadowColor = ITEM_COLORS.rapid; hasAura = true; }
+            if (!hasAura) ctx.shadowColor = COLORS[id];
+            
             ctx.fillStyle = COLORS[id];
-            ctx.shadowColor = COLORS[id];
             ctx.shadowBlur = 15;
             ctx.fill();
             
-            // Draw Player ID text
             ctx.rotate(-p.angle);
             ctx.fillStyle = '#fff';
             ctx.shadowBlur = 0;
             ctx.font = '10px Orbitron';
             ctx.textAlign = 'center';
-            ctx.fillText(id.toUpperCase(), 0, -25);
+            ctx.fillText(p.name, 0, -25); // Show name instead of ID
 
             ctx.restore();
-        } else if (p && !p.isAlive && p.hp <= 0) {
-            // Draw dead marker (x)
+        } else if (p && !p.isAlive && p.hp <= 0 && p.name) {
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.strokeStyle = '#555';
@@ -433,33 +555,51 @@ function render() {
 }
 
 // ==========================================
-// 8. Win Condition Check
+// 8. Win Condition & Save Stats
 // ==========================================
-function checkWinCondition() {
-    if (!isPlaying) return;
+let hasProcessedWin = false;
+
+async function checkWinCondition() {
+    if (!isPlaying || hasProcessedWin) return;
     
     let alivePlayers = [];
-    let deadPlayers = 0;
-    let totalPlayers = 0;
+    let totalReady = 0;
 
     for (let id of ['p1', 'p2', 'p3']) {
-        if (players[id]) {
-            totalPlayers++;
-            if (players[id].isAlive) alivePlayers.push(id);
-            else deadPlayers++;
+        if (players[id] && players[id].name) {
+            totalReady++;
+            if (players[id].isAlive) alivePlayers.push(players[id]);
         }
     }
 
-    // Game ends if only 1 player is alive (and we had 3 players originally)
-    if (totalPlayers === 3 && alivePlayers.length <= 1) {
+    if (totalReady === 3 && alivePlayers.length <= 1) {
+        hasProcessedWin = true;
         set(stateRef, 'finished');
         
-        let winnerStr = alivePlayers.length === 1 ? alivePlayers[0].toUpperCase() : "NOBODY";
-        let colorStr = alivePlayers.length === 1 ? COLORS[alivePlayers[0]] : "#fff";
+        if (alivePlayers.length === 1) {
+            let winner = alivePlayers[0];
+            winnerText.innerText = `${winner.name} WINS!`;
+            
+            // Only the winner themselves updates their score to avoid duplicates
+            if (winner.name === myPlayerName) {
+                const statRef = ref(db, `stats/wins/${myPlayerName}`);
+                await runTransaction(statRef, (currentWins) => {
+                    return (currentWins || 0) + 1;
+                });
+            }
 
-        winnerText.innerText = `${winnerStr} WINS!`;
-        winnerText.style.color = colorStr;
-        winnerText.style.textShadow = `0 0 20px ${colorStr}`;
+            // Read the updated stat to display
+            setTimeout(() => {
+                get(ref(db, `stats/wins/${winner.name}`)).then(snap => {
+                    winnerStatsText.innerText = `Total Wins: ${snap.val() || 1}`;
+                });
+            }, 500);
+
+        } else {
+            winnerText.innerText = `NOBODY WINS!`;
+            winnerText.style.color = '#fff';
+            winnerStatsText.innerText = '';
+        }
 
         gameOverModal.classList.add('active');
     }
@@ -467,11 +607,15 @@ function checkWinCondition() {
 
 // Restart button
 restartBtn.addEventListener('click', () => {
-    // Only p1 can reset to avoid race conditions
+    // Host cleans up
     if (myPlayerId === 'p1') {
         set(playersRef, null);
         set(stateRef, 'waiting');
         set(bulletsRef, null);
+        set(itemsRef, null);
+    } else {
+        // Just remove myself if host is slow
+        remove(ref(db, `game/players/${myPlayerId}`));
     }
     location.reload();
 });

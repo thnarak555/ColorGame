@@ -16,12 +16,25 @@
     <div id="lobby-modal" class="modal active">
         <div class="modal-content">
             <h1>NEON<br>SHOOTER</h1>
-            <p>Welcome to the ultimate space battle arena.</p>
+            <p>Enter your name to join the ultimate space battle arena.</p>
+            
+            <div class="input-group">
+                <input type="text" id="player-name-input" placeholder="Your Name..." maxlength="12">
+            </div>
+
             <div id="lobby-status">
                 Waiting for players... ( <span id="player-count">0</span> / 3 )
             </div>
+            
             <button id="join-btn" class="neon-btn">JOIN GAME</button>
-            <p id="player-assigned" class="hidden">You are Player <span id="my-player-num"></span></p>
+            <p id="player-assigned" class="hidden">Welcome, <span id="my-player-name-disp"></span>! You are <span id="my-player-num"></span></p>
+            
+            <div class="leaderboard-section">
+                <h3>🏆 LEADERBOARD</h3>
+                <ul id="leaderboard-list">
+                    <li>Loading...</li>
+                </ul>
+            </div>
         </div>
     </div>
 
@@ -29,15 +42,15 @@
     <div class="game-wrapper">
         <header class="hud">
             <div class="hp-card p1">
-                <span class="label">P1 (RED)</span>
+                <span class="label" id="label-p1">P1 (RED)</span>
                 <div class="hp-bar"><div class="hp-fill" id="hp-p1"></div></div>
             </div>
             <div class="hp-card p2">
-                <span class="label">P2 (BLUE)</span>
+                <span class="label" id="label-p2">P2 (BLUE)</span>
                 <div class="hp-bar"><div class="hp-fill" id="hp-p2"></div></div>
             </div>
             <div class="hp-card p3">
-                <span class="label">P3 (YELLOW)</span>
+                <span class="label" id="label-p3">P3 (YELLOW)</span>
                 <div class="hp-bar"><div class="hp-fill" id="hp-p3"></div></div>
             </div>
         </header>
@@ -53,8 +66,9 @@
             <h2>GAME OVER</h2>
             <div id="winner-announcement">
                 <h1 id="winner-text">Player X Wins!</h1>
+                <p id="winner-stats-text">Total Wins: 0</p>
             </div>
-            <button id="restart-btn" class="neon-btn">PLAY AGAIN</button>
+            <button id="restart-btn" class="neon-btn">RETURN TO LOBBY</button>
         </div>
     </div>
 

@@ -52,7 +52,7 @@ body {
 
 .modal-content {
     background: #111;
-    padding: 3rem;
+    padding: 2.5rem;
     border-radius: 15px;
     text-align: center;
     border: 2px solid #333;
@@ -62,10 +62,10 @@ body {
 }
 
 .modal-content h1 {
-    font-size: 3rem;
+    font-size: 2.5rem;
     color: #fff;
     text-shadow: 0 0 10px #fff;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
     letter-spacing: 2px;
 }
 
@@ -76,15 +76,67 @@ body {
 }
 
 .modal-content p {
-    font-size: 1.1rem;
-    margin-bottom: 1.5rem;
+    font-size: 1rem;
+    margin-bottom: 1rem;
     color: #aaa;
 }
 
+.input-group {
+    margin: 15px 0;
+}
+
+#player-name-input {
+    width: 100%;
+    padding: 12px;
+    background: #000;
+    border: 2px solid #444;
+    color: #00e5ff;
+    font-size: 1.2rem;
+    text-align: center;
+    border-radius: 8px;
+    outline: none;
+    transition: border 0.3s, box-shadow 0.3s;
+}
+
+#player-name-input:focus {
+    border-color: #00e5ff;
+    box-shadow: 0 0 15px #00e5ff;
+}
+
 #lobby-status {
-    margin: 1.5rem 0;
+    margin: 1rem 0;
     font-size: 1.2rem;
     font-weight: bold;
+}
+
+.leaderboard-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #333;
+    text-align: left;
+}
+
+.leaderboard-section h3 {
+    color: #ffea00;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+#leaderboard-list {
+    list-style: none;
+    color: #fff;
+    font-size: 0.9rem;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+#leaderboard-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 10px;
+    background: #1a1a1a;
+    margin-bottom: 5px;
+    border-radius: 4px;
 }
 
 .hidden {
@@ -95,8 +147,8 @@ body {
     background: transparent;
     color: #fff;
     border: 2px solid #fff;
-    padding: 15px 30px;
-    font-size: 1.2rem;
+    padding: 12px 25px;
+    font-size: 1.1rem;
     font-weight: bold;
     cursor: pointer;
     border-radius: 8px;
@@ -119,8 +171,15 @@ body {
 
 #player-assigned {
     margin-top: 15px;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     color: #fff;
+}
+
+#winner-stats-text {
+    font-size: 1.2rem;
+    color: #ffea00;
+    margin-top: 10px;
+    font-weight: bold;
 }
 
 /* Game Wrapper */
@@ -159,6 +218,10 @@ body {
     font-size: 0.9rem;
     margin-bottom: 5px;
     font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .hp-bar {
