@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Space Shooter</title>
+    <title>Neon Space Shooter: Deathmatch</title>
     <!-- Google Fonts: Orbitron -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,8 @@
     <!-- Lobby Modal -->
     <div id="lobby-modal" class="modal active">
         <div class="modal-content">
-            <h1>NEON<br>SHOOTER</h1>
-            <p>Enter your name to join the ultimate space battle arena.</p>
+            <h1>NEON<br>DEATHMATCH</h1>
+            <p>Enter your name to join the 3-minute battle arena.</p>
             
             <div class="input-group">
                 <input type="text" id="player-name-input" placeholder="Your Name..." maxlength="12">
@@ -43,15 +43,29 @@
         <header class="hud">
             <div class="hp-card p1">
                 <span class="label" id="label-p1">P1 (RED)</span>
-                <div class="hp-bar"><div class="hp-fill" id="hp-p1"></div></div>
+                <div class="stats-row">
+                    <div class="hp-bar"><div class="hp-fill" id="hp-p1"></div></div>
+                    <div class="kills" id="kills-p1">0 Kills</div>
+                </div>
             </div>
+            
+            <div class="timer-display">
+                <span id="time-left">03:00</span>
+            </div>
+
             <div class="hp-card p2">
                 <span class="label" id="label-p2">P2 (BLUE)</span>
-                <div class="hp-bar"><div class="hp-fill" id="hp-p2"></div></div>
+                <div class="stats-row">
+                    <div class="hp-bar"><div class="hp-fill" id="hp-p2"></div></div>
+                    <div class="kills" id="kills-p2">0 Kills</div>
+                </div>
             </div>
             <div class="hp-card p3">
                 <span class="label" id="label-p3">P3 (YELLOW)</span>
-                <div class="hp-bar"><div class="hp-fill" id="hp-p3"></div></div>
+                <div class="stats-row">
+                    <div class="hp-bar"><div class="hp-fill" id="hp-p3"></div></div>
+                    <div class="kills" id="kills-p3">0 Kills</div>
+                </div>
             </div>
         </header>
 
@@ -63,7 +77,7 @@
     <!-- Game Over Modal -->
     <div id="game-over-modal" class="modal">
         <div class="modal-content">
-            <h2>GAME OVER</h2>
+            <h2>TIME'S UP!</h2>
             <div id="winner-announcement">
                 <h1 id="winner-text">Player X Wins!</h1>
                 <p id="winner-stats-text">Total Wins: 0</p>
